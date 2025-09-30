@@ -1,20 +1,30 @@
 [tool.poetry]
-name = "new_project"
+name = "hannibals-army"
 version = "0.1.0"
-description = "new_project using crewAI"
-authors = ["Your Name <you@example.com>"]
+description = "Hannibal using crewAI"
+authors = ["Fares Cherif <fares.elaouani@gmail.com>"]
 
 [tool.poetry.dependencies]
 python = ">=3.10,<=3.13"
 crewai = { extras = ["tools"], version = ">=0.51.1,<1.0.0" }
-
+python-dotenv = "^1.0.0"
 
 [tool.poetry.scripts]
-new_project = "new_project.main:run"
-run_crew = "new_project.main:run"
-train = "new_project.main:train"
-replay = "new_project.main:replay"
-test = "new_project.main:test"
+hannibals-army = "hannibals_army.main:run"
+run_crew = "hannibals_army.main:run"
+train = "hannibals_army.main:train"
+replay = "hannibals_army.main:replay"
+test = "hannibals_army.main:test"
+
+[tool-copyright]
+useLibraryCodeForTypes = true
+exclude = [".cache"]
+
+[tool.ruff]
+line-length = 120
+extend-ignore = ["E501"]
+select = ["E", "W", "F", "I", "B", "C4", "ARG", "SIM"]
+ignore = ["W291", "W292", "W293"]
 
 [build-system]
 requires = ["poetry-core"]
