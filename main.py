@@ -5,6 +5,7 @@ from langgraph.graph.message import add_messages
 from typing_extensions import TypedDict
 from langchain_ollama.llms import OllamaLLM
 from config import MASTER_MODEL
+from src.vector import retriever
 
 load_dotenv()
 
@@ -32,9 +33,22 @@ graph_builder.add_edge("chatbot", END) # We go from chatbot to END
 
 graph = graph_builder.compile()
 
-user_input = input("Enter a message: ")
-state = graph.invoke({"messages": [{"role": "user", "content": user_input}]})
+while True:
+    print("\n\n--------------------------------\n")
+    question = input("Ask your question: ")
+    print("\n\n")
+    if question == "q":
+        break
 
-print(state["messages"][-1].content)
+    feedbacks = retriever.invoke(question)
+
+    state = graph.invoke({"messages": [{"role": "user", "content": question}]})
+
+    print(state["messages"][-1].content)
+
+
+
+
+
 
 
