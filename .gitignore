@@ -1,5 +1,6 @@
 .env
 digital-twin-config.yml
+data/*
 
 # Python-generated files
 __pycache__/
