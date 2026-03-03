@@ -1,6 +1,6 @@
 # Getting started
 
-### Start the project
+## Start the project
 
 This project uses `uv` for dependency management.
 Start with `uv run main.py`.
@@ -16,7 +16,7 @@ llm = init_chat_model(<model>)
 llm = OllamaLLM(model=<model_name>)
 ```
 
-### Configure the digital twin
+## Configure the digital twin
 
 Copy the `digital-twin-config.sample.yml` file to `digital-twin-config.yml` and fill in your personal information.
 
