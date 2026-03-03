@@ -70,8 +70,8 @@ def destination_retriever(state: State) -> State:
     suggestions = retriever.invoke(requirements.get("destination", ""))
     
     print(f"📍 Destination Retriever found: {len(suggestions)} suggestions")  # Debug print
-    print(f"📍 First suggestion: {suggestions[0] if suggestions else 'None'}")  # Debug print
-    
+    print(f"📍 Suggestion: {suggestions if suggestions else 'None'}")  # Debug print
+
     return {
         **state,
         "destination_suggestions": suggestions
@@ -103,6 +103,8 @@ workflow.add_edge("chatbot", END) # We go from chatbot to END
 
 
 graph = workflow.compile()
+
+# PROBLEM: retrieve data is not working well. extraacts all the time same thing. cache?
 
 while True:
     print("\n\n--------------------------------\n")
