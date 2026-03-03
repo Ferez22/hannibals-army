@@ -1,0 +1,185 @@
+# ==========================================
+# DIGITAL TWIN CORE CONFIGURATION (v1.0)
+# ==========================================
+
+identity:
+  name:
+  sex:
+  birth:
+  nationalities: []
+  home_base: # Airport code, for example DUS for Düsseldorf
+  timezone:
+  languages: []
+  height: # cm
+  weight: # kg
+  hobbies: []
+  job:
+  personal_website:
+  preferred_chat_service:
+  email:
+    personal:
+    work:
+
+# --- CAREER SETTINGS ---
+career:
+  current_status:
+  certifications:
+    done: []
+    in_progress: []
+    next: []
+  non_profit:
+    organizations: []
+  goals: []
+
+# --- TRAVEL & LOGISTICS AGENT SETTINGS ---
+travel_logic:
+  flight_constraints:
+    min_layover_minutes:
+    avoid_red_eye:
+    preferred_seats: []
+    flight_limits:
+      [
+        { max_flight_duration_hours, max_budget_per_flight_eur },
+        { max_flight_duration_hours, max_budget_per_flight_eur },
+        { max_flight_duration_hours, max_budget_per_flight_eur },
+      ]
+  accommodation_vibe:
+    type: []
+    must_have: []
+    deal_breakers: []
+
+  food_preferences:
+    dietary: []
+    coffee_style:
+    dinner_window: # HH:MM - HH:MM format
+
+# --- MUSIC & ENTERTAINMENT AGENT SETTINGS ---
+music_dna:
+  genres: []
+  played_instruments: []
+  energy_profile:
+    morning:
+    focus_work:
+    evening:
+  live_event_triggers:
+    min_spotify_affinity: # 0.0 - 1.0
+    max_ticket_price:
+    preferred_venue_size: []
+  favorite_artists: []
+
+# --- SPORTS & PERFORMANCE SETTINGS ---
+sports_interest:
+  sports: []
+  teams: []
+  tracking: []
+  active_performance:
+    calisthenics_focus:
+    running_pace_target: # min/km format
+    preferred_workout_time: # HH:MM AM/PM format
+
+# --- MUSIC PRODUCTION SETTINGS ---
+music_production:
+  instruments_owned: []
+  genres: []
+  strengths: []
+  weaknesses: []
+
+# --- CODING SETTINGS ---
+coding:
+  languages: []
+  frameworks: []
+  other_tools: []
+  projects: []
+  github:
+
+# --- AGENTIC PERMISSIONS (The "Fixer" Rules) ---
+autonomy_levels:
+  booking_permission: # Options: Auto, Ask, Notify
+  re-scheduling_delay_threshold: # minutes
+  emergency_contact:
+
+# ==========================================
+# MINDSET & DECISION MODEL
+# ==========================================
+
+cognitive_profile:
+  thinking_style: []
+  strengths: []
+  growth_edges: []
+  risk_tolerance:
+  decision_framework:
+  stress_response:
+
+# ==========================================
+# PERSONAL BRAND & POSITIONING
+# ==========================================
+
+personal_brand:
+  positioning:
+  niche: []
+  reputation_goals: []
+  content_strategy:
+    primary_platform:
+    themes: []
+    frequency_target_per_month:
+
+# ==========================================
+# ENTREPRENEURSHIP TRACK
+# ==========================================
+
+entrepreneurship:
+  current_vehicle:
+  focus_areas: []
+  long_term_vision:
+  revenue_model: []
+  3_year_target:
+    revenue_eur:
+    team_size:
+    primary_market:
+  exit_strategy:
+
+# ==========================================
+# PERFORMANCE & DISCIPLINE SYSTEM
+# ==========================================
+
+execution_system:
+  weekly_structure:
+    deep_work_blocks_per_week:
+    content_creation_block:
+    certification_study_hours:
+    fitness_sessions:
+  no_compromise_rules: []
+  productivity_stack:
+    tools: []
+    planning_style:
+
+# ==========================================
+# GLOBAL MOBILITY & LIFESTYLE DESIGN
+# ==========================================
+
+lifestyle_design:
+  geographic_strategy:
+    short_term:
+    mid_term:
+    long_term:
+  ideal_environment: []
+  lifestyle_values: []
+
+# ==========================================
+# SOCIAL & NETWORK STRATEGY
+# ==========================================
+
+networking:
+  target_rooms: []
+  give_first_strategy: []
+  relationship_rule:
+
+# ==========================================
+# LEGACY VECTOR
+# ==========================================
+
+legacy:
+  impact_goal:
+  mentorship_intent:
+  future_initiatives: []
+  personal_standard:
