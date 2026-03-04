@@ -6,7 +6,7 @@ The system is composed of multiple agents that work together to provide a compre
 
 ### The 'DONNA'
 
-DONNA is the agent that makes sure your digital twin is up to date and accurate. It decides if a plan suits you or not, by analyzing your digital twin and the plan.
+DONNA is the agent that decides if a plan suits you or not, by analyzing your digital twin and the plan.
 
 ### The 'HANNIBAL'
 
