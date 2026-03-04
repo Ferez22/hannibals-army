@@ -9,6 +9,8 @@ from src.vector import retriever
 from langchain_tavily import TavilySearch
 import os
 import getpass
+import json
+
 
 load_dotenv()
 
@@ -43,7 +45,9 @@ def trip_analyzer(state: State) -> State:
     # Extract structured info using LLM
     extracted_info = extract_trip_info(user_message)
 
+    print("\n\n--------------------------------\n")
     print(f"🔍 Trip Analyzer extracted: {extracted_info}")  # Debug print
+    print("\n\n")
 
     
     return {
@@ -58,19 +62,47 @@ def trip_analyzer(state: State) -> State:
 
 def extract_trip_info(user_message: str) -> dict:
     prompt = f"""Extract from this query: {user_message}
-    Return JSON with: destination, budget, dates, travel_style, activities"""
+ 
+    Return ONLY a JSON object with these fields:
+    - destination: The actual place name (country/city), NOT the full query
+    - budget: (optional)
+    - dates: (optional) 
+    - travel_style: (optional)
+    - activities: (optional)
     
+    Examples:
+    Input: "trip ideas about mexico" → {{"destination": "mexico"}}
+    Input: "visit paris for $2000" → {{"destination": "paris", "budget": "$2000"}}
+    
+    Only return the JSON, nothing else."""
+
+
     response = llm.invoke(prompt)
+
     # Parse response to extract JSON
-    return {"destination": "...", "budget": "...", "dates": "...", "preferences": "..."}
+    try:
+        # Parse the LLM response as JSON
+        parsed = json.loads(response)
+        return {
+            "destination": parsed.get("destination", ""),
+            "budget": parsed.get("budget", ""),
+            "dates": parsed.get("dates", ""),
+            "preferences": parsed.get("travel_style", "")  # Note: travel_style not preferences
+        }
+    except json.JSONDecodeError:
+        # Fallback if LLM doesn't return valid JSON
+        return {"destination": user_message, "budget": "", "dates": "", "preferences": ""}
 
 def destination_retriever(state: State) -> State:
     """Retrieves destination information based on trip requirements"""
     requirements = state["trip_requirements"]
     suggestions = retriever.invoke(requirements.get("destination", ""))
     
-    print(f"📍 Destination Retriever found: {len(suggestions)} suggestions")  # Debug print
+    print("\n\n--------------------------------\n")
+    print(f"📍 Destination Retriever found: {len(suggestions)} suggestions for {requirements}")  # Debug print
+    print("\n\n")
     print(f"📍 Suggestion: {suggestions if suggestions else 'None'}")  # Debug print
+    print("\n\n")
 
     return {
         **state,
@@ -104,12 +136,12 @@ workflow.add_edge("chatbot", END) # We go from chatbot to END
 
 graph = workflow.compile()
 
-# PROBLEM: retrieve data is not working well. extraacts all the time same thing. cache?
+# PROBLEM: retrieve data is not working well. extracts all the time same thing. cache?
 
 while True:
     print("\n\n--------------------------------\n")
     question = input("Ask your question: ")
-    print("\n\n")
+    print("\n")
     if question == "q":
         break
     
