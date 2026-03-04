@@ -21,3 +21,10 @@ llm = OllamaLLM(model=<model_name>)
 Copy the `digital-twin-config.sample.yml` file to `digital-twin-config.yml` and fill in your personal information.
 
 Please note that you can extend this file with your own custom configuration sections. You can also shape it as you wish. Of course, the more information you put the better.
+
+## To Do's
+
+### Next To Do's:
+
+- Internet search should include the suggestions.
+- Edit internet search to filter based on season and budget
