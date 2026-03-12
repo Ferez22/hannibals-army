@@ -26,5 +26,10 @@ Please note that you can extend this file with your own custom configuration sec
 
 ### Next To Do's:
 
-- Internet search should include the suggestions.
+- Modify trip organizer to include some of the extracted suggestions in the plan
 - Edit internet search to filter based on season and budget
+- streamlit:
+  - chat interface
+  - extracted suggestions as widgets
+  - Load more suggestions
+- Save a trip:
