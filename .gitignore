@@ -1,6 +1,7 @@
 .env
 digital-twin-config.yml
 data/*
+trip_plans/*
 
 # Python-generated files
 __pycache__/
@@ -8,7 +9,7 @@ __pycache__/
 build/
 dist/
 wheels/
-*.egg-info
+*.egg-info/
 
 # Virtual environments
 .venv

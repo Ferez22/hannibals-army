@@ -1,9 +1,32 @@
 # Getting started
 
-## Start the project
-
 This project uses `uv` for dependency management.
-Start with `uv run main.py`.
+
+## Options
+
+### 1. TUI Trip Planner (Recommended)
+
+Interactive terminal-based trip planning with intelligent country matching and budget filtering.
+
+```bash
+uv run simple_tui_planner.py
+```
+
+Features:
+
+- 🌍 Smart country matching based on budget and trip type
+- 📝 Interactive TUI with step-by-step workflow
+- 🎯 Personalized trip recommendations
+- 💾 Export to JSON (PDF, Markdown, YAML coming soon)
+- 📊 Scoring algorithm for optimal destinations
+
+### 2. Chat-based Trip Planner
+
+AI-powered trip planning with MCP (Model Context Protocol) integration.
+
+```bash
+uv run main.py
+```
 
 Note in main.py, the model loaded is an Ollama model, make sure you have it running locally.
 Otherwise you can chose to run with a different model by changing the `llm` variable in `main.py`:
