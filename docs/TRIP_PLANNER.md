@@ -11,6 +11,8 @@ The tool includes a chatbot that gathers infos about your trip idea by first ask
 The dataset is load directly from kaggle using the script in `db/load_destinations.py`.
 Alternatively, you can find the CSV inside the `/data` folder.
 
+The idea is to clean it up, sort it then add a description column that has to be populated with more infos and testimonies about the destination.
+
 **Please read the README.md in the `/db` folder for more information about the dataset!!**
 
 ### Save trip data
