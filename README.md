@@ -1,8 +1,37 @@
 # Getting started
 
-This project uses `uv` for dependency management.
+This project uses `uv` for dependency management. Recommended is to install **Ollama** and run it with a **model of choice** then go to `main.py` and adjust the model name. You can also use an LLM of choice.
+
+## Data (Kaggle → local CSV → sorted CSV)
+
+### 1) Download / load the dataset from Kaggle
+
+Run from the project root:
+
+```bash
+uv run db/load_destinations.py
+```
+
+Notes:
+- The loader uses `kagglehub`.
+- Make sure the dataset id and `file_path` inside `db/load_destinations.py` match the dataset you want to use.
+- The rest of the project expects the raw CSV at `data/tourist_destinations.csv`.
+
+### 2) Sort the dataset + add a `Description` column
+
+This script sorts by `Country` (then `Destination Name`), adds an empty `Description` column, and writes a new CSV:
+
+```bash
+uv run utils/clean_trip_destinations_data.py
+```
+
+Output:
+- `data/tourist_destinations_sorted.csv`
 
 ## Options
+
+Either run the Terminal UI, or run the chatbot in the terminal. The TUI doesn't include the websearch (Tavily) yet ! If you want the websearch next to the AI extracted suggestions, then please head to tavily and get yourself an API key. Then copy the `.env.sample` file to `.env` and add your `TAVILY_API_KEY`
+
 
 ### 1. TUI Trip Planner (Recommended)
 
@@ -14,6 +43,7 @@ uv run simple_tui_planner.py
 
 Features:
 
+- **No web search yet !**
 - 🌍 Smart country matching based on budget and trip type
 - 📝 Interactive TUI with step-by-step workflow
 - 🎯 Personalized trip recommendations
