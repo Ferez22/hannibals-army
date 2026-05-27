@@ -49,10 +49,8 @@ def chatbot(state: State):
     try:
         logger.info("🤖 Chatbot processing response...")
         
-        # Get destination suggestions
         suggestions = state.get("destination_suggestions", [])
         
-        # Display retrieved destinations
         if suggestions:
             print("\n🌍 **Retrieved Destinations:**")
             for i, dest in enumerate(suggestions[:5], 1):  # Show top 5
@@ -62,7 +60,6 @@ def chatbot(state: State):
         else:
             print("\n❌ No destinations found. Please try a different search.")
         
-        # Generate chatbot response
         messages = state["messages"]
         response = llm.invoke(messages)
         
@@ -77,14 +74,12 @@ def chatbot(state: State):
 def trip_analyzer(state: State) -> State:
     """Extracts trip requirements from user query"""
     
-    # Get the latest user message
     user_message = state["messages"][-1].content
     
-    # Extract structured info using LLM
     extracted_info = extract_trip_info(user_message)
 
     print("\n\n--------------------------------\n")
-    print(f"🔍 Trip Analyzer extracted: {extracted_info}")  # Debug print
+    print(f"🔍 Trip Analyzer extracted: {extracted_info}")
     print("\n\n")
 
     
@@ -117,15 +112,13 @@ def extract_trip_info(user_message: str) -> dict:
 
     response = llm.invoke(prompt)
 
-    # Parse response to extract JSON
     try:
-        # Parse the LLM response as JSON
         parsed = json.loads(response)
         return {
             "destination": parsed.get("destination", ""),
             "budget": parsed.get("budget", ""),
             "dates": parsed.get("dates", ""),
-            "preferences": parsed.get("travel_style", "")  # Note: travel_style not preferences
+            "preferences": parsed.get("travel_style", "")  # Note: travel_style not preferences !!
         }
     except json.JSONDecodeError:
         # Fallback if LLM doesn't return valid JSON
@@ -133,7 +126,7 @@ def extract_trip_info(user_message: str) -> dict:
 
 
 def destination_retriever(state: State) -> State:
-    """Retrieves destination information using MCP"""
+    """Retrieves destination information using MCP: did the user search for a country? a continent? a season?"""
     try:
         logger.info("🔍 Starting destination retrieval...")
         requirements = state["trip_requirements"]
@@ -148,11 +141,11 @@ def destination_retriever(state: State) -> State:
         
         logger.info(f"🔍 Searching for destinations: {destination}")
         
-        # Determine search type and prepare arguments
+        # Prepare arguments
         destination_lower = destination.lower()
         search_args = {}
         
-        # Common countries list for quick detection
+        # Common countries list
         common_countries = [
             'usa', 'united states', 'canada', 'mexico', 'brazil', 'argentina', 'chile', 'peru',
             'uk', 'united kingdom', 'france', 'germany', 'italy', 'spain', 'greece', 'netherlands',
@@ -172,24 +165,21 @@ def destination_retriever(state: State) -> State:
             'spring', 'summer', 'autumn', 'fall', 'winter'
         ]
         
-        # Check if it's a country
         if any(country in destination_lower for country in common_countries):
             search_args["country"] = destination
             logger.info(f"🔍 Detected country search: {destination}")
         
-        # Check if it's a continent
         elif any(continent in destination_lower for continent in common_continents):
             search_args["continent"] = destination
             logger.info(f"🔍 Detected continent search: {destination}")
         
-        # Check if it's a season
         elif any(season in destination_lower for season in common_seasons):
             search_args["best_season"] = destination
             logger.info(f"🔍 Detected season search: {destination}")
         
         # Check for combined queries (e.g., "beach destinations in europe during summer")
         else:
-            # Extract country, continent, or season from the query
+            # Extract country, continent, or season from the query and put them in the search_args !! at the end we have an array with all args !!
             for continent in common_continents:
                 if continent in destination_lower:
                     search_args["continent"] = continent
@@ -213,7 +203,7 @@ def destination_retriever(state: State) -> State:
                 search_args["query"] = destination
                 logger.info(f"🔍 Detected combined search: {search_args}")
         
-        # Run async MCP connection in sync context
+        # Run async MCP connection in sync context 
         suggestions = asyncio.run(_get_mcp_suggestions(search_args))
         
         logger.info(f"📍 MCP Destination Retriever found: {len(suggestions)} suggestions")

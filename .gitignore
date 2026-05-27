@@ -1,5 +1,6 @@
 .env
 digital-twin-config.yml
+company-config.yml
 data/*
 trip_plans/*
 

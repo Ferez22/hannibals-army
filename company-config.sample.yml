@@ -1,0 +1,220 @@
+# ==========================================
+# COMPANY KNOWLEDGE CONFIG (v1.0)
+# ==========================================
+# This file is both a seed and a living artifact.
+# Fill it manually at setup, then agents update it
+# automatically as they learn from ingested documents.
+#
+# DO NOT rename top-level keys — agents reference them.
+# _meta block is written by agents, do not edit manually.
+# ==========================================
+
+_meta:
+  last_updated_by: "CARTOGRAPHER"       # agent that last wrote to this file
+  last_updated_at: "2026-01-01T00:00:00"
+  confidence_score: 1.0                  # drops if agents detect conflicts
+  schema_version: "1.0"
+
+# ==========================================
+# COMPANY IDENTITY
+# ==========================================
+
+identity:
+  name: "Acme Corp"
+  legal_name: "Acme Corporation GmbH"
+  industry: "Software / Consulting"
+  founded: "2020"
+  size: "11-50"                          # headcount range
+  hq: "Berlin, Germany"
+  timezone: "CET"
+  website: "https://acme.com"
+  languages: ["German", "English"]
+  email_domain: "acme.com"
+
+# ==========================================
+# LEADERSHIP
+# ==========================================
+
+leadership:
+  ceo:
+    name: "Jane Doe"
+    email: "jane@acme.com"
+    contact: "Telegram: @janedoe"
+  cto:
+    name: "John Smith"
+    email: "john@acme.com"
+  hr_lead:
+    name: "Maria Lopez"
+    email: "maria@acme.com"
+    note: "Primary contact for rule/policy validation notifications"
+
+# ==========================================
+# TEAMS
+# ==========================================
+# Agents update this block when new teams/sub-teams are discovered.
+# Structure mirrors the knowledge graph Team nodes.
+
+teams:
+  - name: "Engineering"
+    lead: "John Smith"
+    mission: "Build and maintain all technical products"
+    domain: "Technology"
+    sub_teams:
+      - name: "Backend"
+        lead: "Alice Chen"
+        tasks: ["API development", "database architecture", "infrastructure"]
+      - name: "Frontend"
+        lead: "Bob Müller"
+        tasks: ["UI components", "design system", "performance"]
+
+  - name: "Operations"
+    lead: "Maria Lopez"
+    mission: "Keep the company running smoothly"
+    domain: "Internal"
+    sub_teams:
+      - name: "HR"
+        lead: "Maria Lopez"
+        tasks: ["hiring", "onboarding", "policy management"]
+      - name: "Finance"
+        lead: "Carlos Rivera"
+        tasks: ["invoicing", "payroll", "reporting"]
+
+  - name: "AI Club"
+    lead: "Alice Chen"
+    mission: "Internal AI experimentation and knowledge sharing"
+    domain: "Community"
+    sub_teams: []
+
+# ==========================================
+# PEOPLE (key members — agents expand this)
+# ==========================================
+# Agents add/update entries as they discover people in documents.
+# Each person can have multiple memberships (team + role + tasks).
+
+people:
+  - name: "Alice Chen"
+    email: "alice@acme.com"
+    memberships:
+      - team: "Engineering/Backend"
+        role: "Lead Developer"
+        tasks: ["API development", "retrospectives", "weeklies"]
+      - team: "AI Club"
+        role: "Lead"
+        tasks: ["organize sessions", "invite speakers"]
+    skills: ["Python", "FastAPI", "PostgreSQL", "LLMs"]
+    tenure_since: "2022-03"
+
+  - name: "Bob Müller"
+    email: "bob@acme.com"
+    memberships:
+      - team: "Engineering/Frontend"
+        role: "Lead Developer"
+        tasks: ["React", "design system"]
+      - team: "Product Alpha"
+        role: "Associate"
+        tasks: ["write specs", "user testing"]
+    skills: ["React", "TypeScript", "Figma"]
+    tenure_since: "2023-06"
+
+# ==========================================
+# ACTIVE PROJECTS
+# ==========================================
+# Agents update status, add new projects, mark completed ones.
+
+projects:
+  - name: "Product Alpha"
+    status: "In Progress"              # In Progress / On Hold / Completed / Cancelled
+    team: "Engineering"
+    lead: "Alice Chen"
+    started: "2026-01-15"
+    target: "2026-06-30"
+    description: "Customer-facing SaaS product for SMEs"
+    last_updated_at: "2026-05-01"      # agents update this field
+
+  - name: "Internal Tooling v2"
+    status: "On Hold"
+    team: "Engineering/Backend"
+    lead: "John Smith"
+    started: "2025-11-01"
+    target: null
+    description: "Rewrite of internal admin dashboard"
+    last_updated_at: "2026-03-10"
+
+# ==========================================
+# RULES & POLICIES
+# ==========================================
+# Agents flag stale entries. notify_person receives validation request.
+# valid_until: null means no expiry. Agents set this based on content.
+
+rules:
+  - id: "rule-001"
+    category: "policy"
+    title: "Remote Work Policy"
+    content: "Employees may work remotely up to 3 days per week. Full remote requires manager approval."
+    owner: "HR"
+    notify_person: "maria@acme.com"
+    valid_until: "2026-12-31"
+    confidence_score: 1.0
+    last_verified_at: "2026-01-10"
+    source_document: "HR_Policy_2026.pdf"
+
+  - id: "rule-002"
+    category: "process"
+    title: "Code Review Process"
+    content: "All PRs require at least 1 approval from a senior engineer before merging to main."
+    owner: "Engineering"
+    notify_person: "john@acme.com"
+    valid_until: null
+    confidence_score: 0.9
+    last_verified_at: "2025-09-15"
+    source_document: "Engineering_Handbook.pdf"
+
+  - id: "rule-003"
+    category: "value"
+    title: "Communication Standard"
+    content: "Default to async communication. Slack for quick messages, Notion for documentation, meetings only when async fails."
+    owner: "Leadership"
+    notify_person: "jane@acme.com"
+    valid_until: null
+    confidence_score: 1.0
+    last_verified_at: "2026-02-01"
+    source_document: "Company_Handbook.pdf"
+
+# ==========================================
+# TOOLS & STACK
+# ==========================================
+
+tools:
+  productivity: ["Notion", "Slack", "Google Workspace"]
+  development: ["GitHub", "Docker", "Azure DevOps"]
+  communication: ["Slack", "Telegram", "Google Meet"]
+  design: ["Figma"]
+  finance: ["DATEV", "Stripe"]
+
+# ==========================================
+# CULTURE & VALUES
+# ==========================================
+
+culture:
+  values:
+    - "Ship fast, iterate often"
+    - "Radical transparency"
+    - "People over process"
+    - "Ownership mindset"
+  working_style: "Async-first, deep work culture"
+  review_cycle: "Quarterly"
+  all_hands_frequency: "Monthly"
+
+# ==========================================
+# RECENT EVENTS (agents append here)
+# ==========================================
+# Agents add significant company events as they find them in documents.
+# Kept to last 10 entries — older events live in the knowledge graph only.
+
+recent_events:
+  - name: "Q1 2026 All-Hands"
+    date: "2026-04-02"
+    type: "company_meeting"
+    participants: ["Jane Doe", "John Smith", "Maria Lopez", "Alice Chen", "Bob Müller"]
+    outcome: "Announced Product Alpha beta launch in June 2026"
+    source_document: "AllHands_Q1_2026_notes.pdf"
