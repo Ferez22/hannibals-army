@@ -64,13 +64,18 @@ class VectorStore:
         where = {"company_id": company_id}
         if entity_type:
             where = {"$and": [{"company_id": company_id}, {"entity_type": entity_type}]}
+        if self._collection.count() == 0:
+            return []
         result = self._collection.query(
             query_texts=[query],
             n_results=k,
             where=where,
         )
+        ids = (result.get("ids") or [[]])[0]
+        docs = (result.get("documents") or [[]])[0]
+        dists = (result.get("distances") or [[]])[0]
         hits: list[dict[str, Any]] = []
-        for nid, doc, dist in zip(result["ids"][0], result["documents"][0], result["distances"][0]):
+        for nid, doc, dist in zip(ids, docs, dists):
             hits.append({"node_id": nid, "document": doc, "distance": dist})
         return hits
 

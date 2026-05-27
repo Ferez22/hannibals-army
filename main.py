@@ -1,12 +1,21 @@
-"""Hannibal's Army — entry point. Launches the Textual TUI."""
+"""Hannibal's Army — entry point. Launches the Textual TUI.
+
+KG initialization happens BEFORE the TUI starts. sentence-transformers spawns
+multiprocessing workers that conflict with Textual's event loop on Python 3.13,
+so we pay the load cost upfront in the main process.
+"""
 from __future__ import annotations
 
 import logging
+import os
 import sys
 from logging.handlers import RotatingFileHandler
 
+# Block torch / transformers from spawning helper processes inside Textual.
+os.environ.setdefault("TOKENIZERS_PARALLELISM", "false")
+os.environ.setdefault("OMP_NUM_THREADS", "1")
+
 import config
-from tui.app import HannibalsArmyApp
 
 
 def setup_logging() -> None:
@@ -21,8 +30,21 @@ def setup_logging() -> None:
     logging.basicConfig(level=logging.INFO, handlers=[handler], force=True)
 
 
+def warmup() -> None:
+    """Force model + DB load before Textual takes over the event loop."""
+    print("loading knowledge graph (first run downloads embedding model)...", flush=True)
+    from core.ingestion_pipeline import get_kg
+
+    kg = get_kg()
+    # Force the embedder to actually load weights now, not lazily.
+    kg.vectors.search(query="warmup", company_id=config.COMPANY_ID, k=1)
+    print("ready.", flush=True)
+
+
 def main() -> int:
     setup_logging()
+    warmup()
+    from tui.app import HannibalsArmyApp
     HannibalsArmyApp().run()
     return 0
 
