@@ -13,7 +13,7 @@ from rich.console import Console
 from rich.logging import RichHandler
 
 import config
-from agents import ALL_AGENTS
+from agents import all_agents
 
 
 def setup_logging() -> None:
@@ -45,16 +45,17 @@ def main() -> int:
     console.print(f"[dim]company: {config.COMPANY_ID}   model: {config.MASTER_MODEL}[/]", justify="center")
     console.print()
 
+    agents = all_agents()
     console.print("[#F5A623]Standing by:[/]")
-    for agent in ALL_AGENTS:
+    for agent in agents:
         console.print(f"  [#5BC8F5]●[/] [bold]{agent.name:<14}[/] [dim]{agent.tagline}[/]")
 
     console.print()
-    console.print(f"[#2ECC71]✔[/] {len(ALL_AGENTS)} agents loaded")
+    console.print(f"[#2ECC71]✔[/] {len(agents)} agents loaded")
     console.print(f"[dim]config: {config.REPO_ROOT}[/]")
     console.print()
 
-    log.info("army_ready", extra={"agents": len(ALL_AGENTS)})
+    log.info("army_ready", extra={"agents": len(agents)})
     return 0
 
 
