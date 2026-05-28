@@ -93,23 +93,37 @@ class Cartographer(BaseAgent):
         seeded_teams = _seeded_team_names()
         promoted_ids: dict[str, list[str]] = {k: [] for k in _TYPE_MAP.values()}
         staged_ids: dict[str, list[str]] = {k: [] for k in _TYPE_MAP.values()}
-        bumped_ids: list[str] = []  # existing live nodes corroborated
+        bumped_ids: list[str] = []  # existing live OR pending nodes corroborated
+
+        # Snapshot pending stagings once — used to dedup new extractions
+        existing_pending = self.kg.list_pending()
 
         for ext_key, entity_type in _TYPE_MAP.items():
             existing_live = self.kg.list_live(entity_type)
+            pending_for_type = [p for p in existing_pending if p["entity_type"] == entity_type]
+
             for item in extraction.get(ext_key, []):
-                # Dedup
+                # 1) Dedup against LIVE
                 existing_id = dedup.find_existing(entity_type, item, existing_live)
                 if existing_id:
                     self.kg.bump_corroboration(existing_id)
                     bumped_ids.append(existing_id)
                     log.info(
-                        "corroborated",
+                        "corroborated_live",
                         extra={"entity_type": entity_type, "live_id": existing_id},
                     )
                     continue
 
-                # New — apply promotion gate
+                # 2) Dedup against PENDING staging (avoid creating duplicate staged rows)
+                pending_match = dedup.find_existing(entity_type, item, pending_for_type)
+                if pending_match:
+                    log.info(
+                        "skipped_duplicate_pending",
+                        extra={"entity_type": entity_type, "staging_id": pending_match},
+                    )
+                    continue
+
+                # 3) New — apply promotion gate
                 fields = _to_storage_fields(entity_type, item)
                 auto, reason = promotion.should_auto_promote(
                     entity_type,
@@ -126,6 +140,8 @@ class Cartographer(BaseAgent):
                     )
                     live_id = self.kg.promote(staging_id, _entity_description(entity_type, fields))
                     promoted_ids[entity_type].append(live_id)
+                    # Add to live list so subsequent items in same batch dedup against it
+                    existing_live.append(self.kg.get_live(live_id))
                     log.info(
                         "auto_promoted",
                         extra={"entity_type": entity_type, "live_id": live_id},
@@ -139,6 +155,12 @@ class Cartographer(BaseAgent):
                         blocked_reason=reason,
                     )
                     staged_ids[entity_type].append(staging_id)
+                    # Add to pending list so subsequent items in same batch dedup against it
+                    pending_for_type.append({
+                        "id": staging_id,
+                        "entity_type": entity_type,
+                        "fields": fields,
+                    })
                     log.info(
                         "staged_pending",
                         extra={"entity_type": entity_type, "reason": reason},

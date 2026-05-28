@@ -304,6 +304,8 @@ class GraphStore:
             entity_type = row["entity_type"]
             live_id = f"{entity_type.lower()}_{uuid.uuid4().hex[:12]}"
             now = datetime.now().isoformat()
+            # Initial confidence per formula: min(1, source_count/3). source_count starts at 1.
+            initial_confidence = min(1.0, 1.0 / 3.0)
 
             c.execute(
                 """INSERT INTO live_nodes
@@ -311,7 +313,7 @@ class GraphStore:
                    VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     live_id, row["company_id"], entity_type, row["fields_json"],
-                    now, now, 1, row["confidence"],
+                    now, now, 1, initial_confidence,
                 ),
             )
             # mark staging as promoted (keep row for audit)

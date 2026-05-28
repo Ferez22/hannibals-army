@@ -64,9 +64,12 @@ class BrowserScreen(Screen):
 
     @on(DataTable.RowHighlighted)
     def on_row(self, event: DataTable.RowHighlighted) -> None:
+        if event.cursor_row is None or event.cursor_row < 0:
+            return
         et = ENTITY_TYPES[self.current_type_idx]
         nodes = get_kg().list_live(et)
-        if event.cursor_row >= len(nodes):
+        if not nodes or event.cursor_row >= len(nodes):
+            self.query_one("#b-detail", Static).update("[dim]no rows[/]")
             return
         node = nodes[event.cursor_row]
         lines = [

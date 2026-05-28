@@ -56,17 +56,20 @@ class PendingScreen(Screen):
 
     def _current_row(self) -> dict | None:
         table = self.query_one("#p-table", DataTable)
-        if table.cursor_row is None:
+        if table.cursor_row is None or table.cursor_row < 0:
             return None
         pendings = get_kg().list_pending()
-        if table.cursor_row >= len(pendings):
+        if not pendings or table.cursor_row >= len(pendings):
             return None
         return pendings[table.cursor_row]
 
     @on(DataTable.RowHighlighted)
     def on_row(self, event: DataTable.RowHighlighted) -> None:
+        if event.cursor_row is None or event.cursor_row < 0:
+            return
         node = self._current_row()
         if not node:
+            self.query_one("#p-detail", Static).update("[dim]no rows[/]")
             return
         lines = [
             f"[bold #5BC8F5]{node['id']}[/]",

@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import logging
+import re
 from datetime import datetime
 from pathlib import Path
 from typing import Any
@@ -26,10 +27,12 @@ class Ragnar(BaseAgent):
         source = task.get("source")
         if not source:
             return AgentResult(False, error="missing 'source' in task")
+        source = source.strip()
 
         try:
-            if _is_url(source):
-                return self._parse_url(source)
+            normalized_url = _normalize_url(source)
+            if normalized_url:
+                return self._parse_url(normalized_url)
             return self._parse_file(Path(source))
         except Exception as e:
             log.exception("ragnar_failed", extra={"source": source})
@@ -77,8 +80,15 @@ class Ragnar(BaseAgent):
         return AgentResult(True, data=doc)
 
 
-def _is_url(s: str) -> bool:
-    return s.startswith(("http://", "https://"))
+def _normalize_url(s: str) -> str | None:
+    """Return canonical URL if s looks like a web address, else None."""
+    s = s.strip()
+    if s.startswith(("http://", "https://")):
+        return s
+    # Bare domains: www.example.com, example.com/path, etc.
+    if re.match(r"^(?:www\.|[a-z0-9-]+\.)[a-z0-9.-]+\.[a-z]{2,}(?:/.*)?$", s, re.IGNORECASE):
+        return f"https://{s}"
+    return None
 
 
 RAGNAR = Ragnar()
