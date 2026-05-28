@@ -6,6 +6,7 @@ from typing import Any
 
 import config
 from agents.base_agent import AgentResult, BaseAgent
+from agents.donna import detect_conflict
 from capabilities import dedup, extractor, promotion
 from core.entity_types import RawDocument
 from core.knowledge_graph import KnowledgeGraph
@@ -106,6 +107,29 @@ class Cartographer(BaseAgent):
                 # 1) Dedup against LIVE
                 existing_id = dedup.find_existing(entity_type, item, existing_live)
                 if existing_id:
+                    live_node = next((n for n in existing_live if n["id"] == existing_id), None)
+                    # Conflict check before bumping
+                    candidate_fields = _to_storage_fields(entity_type, item)
+                    conflict = detect_conflict(entity_type, candidate_fields, live_node) if live_node else None
+                    if conflict:
+                        self.kg.graph.queue_for_review(
+                            company_id=self.kg.company_id,
+                            kind="conflict",
+                            entity_type=entity_type,
+                            live_node_id=existing_id,
+                            candidate_node_id=None,
+                            details={
+                                "doc_id": doc_node_id,
+                                "candidate_fields": candidate_fields,
+                                "live_fields": live_node["fields"],
+                                "diffs": conflict["diffs"],
+                            },
+                        )
+                        log.info(
+                            "conflict_queued",
+                            extra={"entity_type": entity_type, "live_id": existing_id},
+                        )
+                        # Still bump corroboration since the entity IS the same identity, only some fields differ
                     self.kg.bump_corroboration(existing_id)
                     bumped_ids.append(existing_id)
                     log.info(

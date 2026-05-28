@@ -325,6 +325,25 @@ class GraphStore:
         return live_id
 
     # ---- Review queue ----
+    def list_review_queue(
+        self, company_id: str, kind: str | None = None, resolved: bool = False
+    ) -> list[dict]:
+        with self.conn() as c:
+            q = "SELECT * FROM review_queue WHERE company_id = ? AND resolved = ?"
+            params: list = [company_id, 1 if resolved else 0]
+            if kind:
+                q += " AND kind = ?"
+                params.append(kind)
+            q += " ORDER BY created_at DESC"
+            rows = c.execute(q, params).fetchall()
+            return [_row_to_review(r) for r in rows]
+
+    def resolve_review(self, review_id: int) -> None:
+        with self.conn() as c:
+            c.execute(
+                "UPDATE review_queue SET resolved = 1 WHERE id = ?", (review_id,)
+            )
+
     def queue_for_review(
         self,
         *,
@@ -369,6 +388,20 @@ def _row_to_edge(row: sqlite3.Row) -> dict:
         "to_id": row["to_id"],
         "properties": json.loads(row["properties_json"]) if row["properties_json"] else {},
         "created_at": row["created_at"],
+    }
+
+
+def _row_to_review(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "company_id": row["company_id"],
+        "kind": row["kind"],
+        "entity_type": row["entity_type"],
+        "live_node_id": row["live_node_id"],
+        "candidate_node_id": row["candidate_node_id"],
+        "details": json.loads(row["details_json"]) if row["details_json"] else {},
+        "created_at": row["created_at"],
+        "resolved": bool(row["resolved"]),
     }
 
 

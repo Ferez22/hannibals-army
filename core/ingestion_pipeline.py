@@ -31,6 +31,8 @@ def get_kg() -> KnowledgeGraph:
         CARTOGRAPHER.kg = _KG
         from agents.oracle import ORACLE
         ORACLE.kg = _KG
+        from agents.donna import DONNA
+        DONNA.kg = _KG
     return _KG
 
 

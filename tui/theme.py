@@ -116,23 +116,23 @@ RichLog {
     margin: 0 1;
 }
 
-/* Browser + Pending split: table on left (50%), detail on right (50%) */
-#b-table, #p-table {
+/* Browser + Pending + Review split: table on left (50%), detail on right (50%) */
+#b-table, #p-table, #r-table {
     width: 50%;
     height: 1fr;
 }
-#b-detail, #p-detail {
+#b-detail, #p-detail, #r-detail {
     width: 50%;
     height: 1fr;
     border: tall #4A5568;
     padding: 0 1;
 }
-#p-actions {
+#p-actions, #r-actions {
     height: 3;
     align-horizontal: left;
     width: 50%;
 }
-#p-actions Button {
+#p-actions Button, #r-actions Button {
     width: 14;
     margin: 0 1;
 }

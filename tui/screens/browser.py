@@ -3,12 +3,14 @@ from __future__ import annotations
 
 import json
 
+from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import DataTable, Footer, Header, Static
 
+from agents.donna import is_stale
 from core.ingestion_pipeline import get_kg
 
 ENTITY_TYPES = ["Person", "Team", "Project", "Rule", "Event", "Document"]
@@ -38,6 +40,10 @@ class BrowserScreen(Screen):
         table.cursor_type = "row"
         self.refresh_type()
 
+    def on_screen_resume(self) -> None:
+        # Re-read graph state when returning from Review/Pending
+        self.refresh_type()
+
     def action_prev_type(self) -> None:
         self.current_type_idx = (self.current_type_idx - 1) % len(ENTITY_TYPES)
         self.refresh_type()
@@ -59,7 +65,11 @@ class BrowserScreen(Screen):
             name = n["fields"].get("name") or n["fields"].get("title") or "—"
             conf = n["confidence"]
             color = "#2ECC71" if conf >= 0.6 else ("#F5A623" if conf >= 0.3 else "#E74C3C")
-            table.add_row(n["id"][:24], str(name), f"[{color}]{conf:.2f}[/]")
+            name_cell = Text(str(name))
+            if is_stale(n):
+                name_cell.append("  ●stale", style="bold #E74C3C")
+            conf_cell = Text(f"{conf:.2f}", style=color)
+            table.add_row(n["id"][:24], name_cell, conf_cell)
         self.query_one("#b-detail", Static).update("[dim]select a row to inspect[/]")
 
     @on(DataTable.RowHighlighted)

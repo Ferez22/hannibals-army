@@ -4,6 +4,11 @@ company-config.yml
 data/*
 trip_plans/*
 
+# Runtime data — never commit
+db/
+memory/
+logs/
+
 # Python-generated files
 __pycache__/
 *.py[oc]

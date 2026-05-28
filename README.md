@@ -102,3 +102,6 @@ data/samples/MITRA (1).xlsx
 - data/samples/BE QARTMINA.pdf
   - data/samples/additionality.pdf
   - data/samples/RNE QARTMINA MARS 2026.pdf
+
+age person by 400 days (to test stalenessness):
+.venv/bin/python scripts/age_nodes.py --type Person --days 400 --all

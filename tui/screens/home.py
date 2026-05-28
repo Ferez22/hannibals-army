@@ -27,6 +27,7 @@ class HomeScreen(Screen):
                 "[#5BC8F5]q[/] query    "
                 "[#5BC8F5]b[/] browser    "
                 "[#5BC8F5]p[/] pending    "
+                "[#5BC8F5]v[/] review    "
                 "[#5BC8F5]r[/] refresh    "
                 "[#5BC8F5]ctrl+c[/] quit",
                 classes="dim",
@@ -62,7 +63,9 @@ class HomeScreen(Screen):
             n = len(kg.list_live(et))
             counts.append(f"  {et:9s} [bold #5BC8F5]{n}[/]")
         pending = kg.pending_count()
+        review = len(kg.graph.list_review_queue(kg.company_id))
         counts.append(f"  [#F5D020]Pending[/]   [bold]{pending}[/]")
+        counts.append(f"  [#F5A623]Review[/]    [bold]{review}[/]")
         self.query_one("#kg-block", Static).update("\n".join(counts))
 
         # Status bar

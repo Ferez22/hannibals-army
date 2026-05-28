@@ -9,6 +9,7 @@ from tui.screens.home import HomeScreen
 from tui.screens.ingest import IngestScreen
 from tui.screens.pending import PendingScreen
 from tui.screens.query import QueryScreen
+from tui.screens.review import ReviewScreen
 from tui.theme import CSS
 
 
@@ -23,6 +24,7 @@ class HannibalsArmyApp(App):
         "query":   QueryScreen,
         "browser": BrowserScreen,
         "pending": PendingScreen,
+        "review":  ReviewScreen,
     }
 
     BINDINGS = [
@@ -31,6 +33,7 @@ class HannibalsArmyApp(App):
         ("q", "goto('query')",   "Query"),
         ("b", "goto('browser')", "Browser"),
         ("p", "goto('pending')", "Pending"),
+        ("v", "goto('review')",  "Review"),
         ("escape", "back",       "Back"),
     ]
 
@@ -44,6 +47,8 @@ class HannibalsArmyApp(App):
         self.push_screen(name)
 
     def action_back(self) -> None:
-        # Pop down to home but never below it
+        # Never pop the Home screen — it's the root
+        if isinstance(self.screen, HomeScreen):
+            return
         if len(self.screen_stack) > 1:
             self.pop_screen()
