@@ -27,6 +27,7 @@ class Person(MemoryFields):
     contact: str | None = None
     tenure_since: str | None = None  # ISO date
     expertise: list[str] = Field(default_factory=list)
+    photo_path: str | None = None  # relative to REPO_ROOT, e.g. data/photos/person_xxx.jpg
 
 
 class Team(MemoryFields):

@@ -28,6 +28,8 @@ class HomeScreen(Screen):
                 "[#5BC8F5]b[/] browser    "
                 "[#5BC8F5]p[/] pending    "
                 "[#5BC8F5]v[/] review    "
+                "[#5BC8F5]e[/] employees    "
+                "[#5BC8F5]a[/] attach photo    "
                 "[#5BC8F5]r[/] refresh    "
                 "[#5BC8F5]ctrl+c[/] quit",
                 classes="dim",

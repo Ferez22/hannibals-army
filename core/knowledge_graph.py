@@ -91,6 +91,20 @@ class KnowledgeGraph:
             )
         return live_id
 
+    def update_live_field(self, live_id: str, field: str, value: object) -> None:
+        """Patch a single field on a live node's fields JSON."""
+        import json
+        node = self.graph.get_live_node(live_id)
+        if not node:
+            raise ValueError(f"live node {live_id} not found")
+        fields = node["fields"]
+        fields[field] = value
+        with self.graph.conn() as c:
+            c.execute(
+                "UPDATE live_nodes SET fields_json = ? WHERE id = ?",
+                (json.dumps(fields), live_id),
+            )
+
     def bump_corroboration(self, live_id: str) -> None:
         """Increment source_count, recompute confidence."""
         node = self.graph.get_live_node(live_id)

@@ -941,11 +941,13 @@ dependencies = [
     { name = "pyyaml" },
     { name = "rapidfuzz" },
     { name = "reportlab" },
+    { name = "requests" },
     { name = "rich" },
     { name = "ruff" },
     { name = "sentence-transformers" },
     { name = "streamlit" },
     { name = "textual" },
+    { name = "textual-image", extra = ["textual"] },
     { name = "trafilatura" },
 ]
 
@@ -971,11 +973,13 @@ requires-dist = [
     { name = "pyyaml", specifier = ">=6.0" },
     { name = "rapidfuzz", specifier = ">=3.14.5" },
     { name = "reportlab", specifier = ">=4.0.0" },
+    { name = "requests", specifier = ">=2.32.5" },
     { name = "rich", specifier = ">=13.0.0" },
     { name = "ruff", specifier = ">=0.15.4" },
     { name = "sentence-transformers", specifier = ">=5.5.1" },
     { name = "streamlit", specifier = ">=1.54.0" },
     { name = "textual", specifier = ">=8.2.7" },
+    { name = "textual-image", extras = ["textual"], specifier = ">=0.12.0" },
     { name = "trafilatura", specifier = ">=2.0.0" },
 ]
 
@@ -3893,6 +3897,24 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/9b/7a/c519db0aba5024f86e71e9631810bfdd6866ed2c8695bd7fa34b90e7ef59/textual-8.2.7.tar.gz", hash = "sha256:658f568ff81e30ed43890c3e07520390e5cf1b4763822006e060656b0a88f105", size = 1859249, upload-time = "2026-05-19T10:52:49.531Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/a8/f5/c1e18bc0707300a0e90204343abbf7d7acd6fb7ebe03a6d4893b99a234b8/textual-8.2.7-py3-none-any.whl", hash = "sha256:4caaa13a90bc4cf9c6c862c067ccd34fe84e9c161710a2a907a8026313b6bd73", size = 731129, upload-time = "2026-05-19T10:52:51.773Z" },
+]
+
+[[package]]
+name = "textual-image"
+version = "0.12.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "pillow" },
+    { name = "rich" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/c2/e7/c82ea0604874b6d51d5717a0911061ae5810e36dad2e4d2b11fa7d54cdaa/textual_image-0.12.0.tar.gz", hash = "sha256:fdd0b5ff9c8a99740bc360a99ce014d563fa97d07a5b49b472470809f57c0a74", size = 116403, upload-time = "2026-04-12T17:37:44.696Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/67/2c/38ac586a3834a3bd8cbcf0c8ea1ae23bf68b9cc13b96a67f47a825479dd3/textual_image-0.12.0-py3-none-any.whl", hash = "sha256:0b13f62fe6a29f4ed6dfd641f2779ffe92dde41f16163fa1de69158477aa50aa", size = 115626, upload-time = "2026-04-12T17:37:41.238Z" },
+]
+
+[package.optional-dependencies]
+textual = [
+    { name = "textual" },
 ]
 
 [[package]]

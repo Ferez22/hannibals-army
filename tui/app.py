@@ -4,7 +4,9 @@ from __future__ import annotations
 from textual.app import App
 
 import config
+from tui.screens.attach import AttachScreen
 from tui.screens.browser import BrowserScreen
+from tui.screens.employees import EmployeesScreen
 from tui.screens.home import HomeScreen
 from tui.screens.ingest import IngestScreen
 from tui.screens.pending import PendingScreen
@@ -19,22 +21,26 @@ class HannibalsArmyApp(App):
     SUB_TITLE = f"company: {config.COMPANY_ID}   model: {config.MASTER_MODEL}"
 
     SCREENS = {
-        "home":    HomeScreen,
-        "ingest":  IngestScreen,
-        "query":   QueryScreen,
-        "browser": BrowserScreen,
-        "pending": PendingScreen,
-        "review":  ReviewScreen,
+        "home":      HomeScreen,
+        "ingest":    IngestScreen,
+        "query":     QueryScreen,
+        "browser":   BrowserScreen,
+        "pending":   PendingScreen,
+        "review":    ReviewScreen,
+        "attach":    AttachScreen,
+        "employees": EmployeesScreen,
     }
 
     BINDINGS = [
         ("ctrl+c", "quit", "Quit"),
-        ("i", "goto('ingest')",  "Ingest"),
-        ("q", "goto('query')",   "Query"),
-        ("b", "goto('browser')", "Browser"),
-        ("p", "goto('pending')", "Pending"),
-        ("v", "goto('review')",  "Review"),
-        ("escape", "back",       "Back"),
+        ("i", "goto('ingest')",    "Ingest"),
+        ("q", "goto('query')",     "Query"),
+        ("b", "goto('browser')",   "Browser"),
+        ("p", "goto('pending')",   "Pending"),
+        ("v", "goto('review')",    "Review"),
+        ("e", "goto('employees')", "Employees"),
+        ("a", "goto('attach')",    "Attach"),
+        ("escape", "back",         "Back"),
     ]
 
     def on_mount(self) -> None:

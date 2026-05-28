@@ -141,4 +141,52 @@ RichLog {
 Horizontal {
     height: auto;
 }
+
+/* Attach screen */
+#a-table {
+    width: 50%;
+    height: 1fr;
+}
+#a-form {
+    width: 50%;
+    padding: 1 2;
+}
+#a-form Input {
+    margin: 1 0;
+}
+#a-form Button {
+    width: 14;
+}
+
+/* Employees grid */
+#e-grid {
+    grid-size: 2;
+    grid-gutter: 1 2;
+    padding: 1 2;
+    height: 1fr;
+}
+.emp-card {
+    border: tall #4A5568;
+    padding: 1 1;
+    height: auto;
+    background: #161B22;
+}
+.emp-header {
+    height: auto;
+}
+.emp-photo {
+    width: 18;
+    height: 8;
+    margin-right: 1;
+}
+.emp-info {
+    width: 1fr;
+    height: auto;
+}
+.emp-body {
+    margin-top: 1;
+    padding-top: 1;
+    border-top: tall #4A5568;
+    height: auto;
+}
 """
