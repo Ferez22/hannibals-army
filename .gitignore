@@ -5,9 +5,13 @@ data/*
 trip_plans/*
 
 # Runtime data — never commit
-db/
+db/*
 memory/
 logs/
+
+db/graph.db
+army.log
+chroma.sqlite3
 
 # Python-generated files
 __pycache__/
