@@ -23,11 +23,15 @@ class Person(MemoryFields):
     id: str
     company_id: str
     name: str
-    email: str | None = None
+    kind: Literal["employee", "external", "unknown"] = "unknown"
+    emails: list[str] = Field(default_factory=list)
     contact: str | None = None
+    role: str | None = None
+    sub_roles: list[str] = Field(default_factory=list)
     tenure_since: str | None = None  # ISO date
     expertise: list[str] = Field(default_factory=list)
-    photo_path: str | None = None  # relative to REPO_ROOT, e.g. data/photos/person_xxx.jpg
+    photo_path: str | None = None  # relative to REPO_ROOT
+    external_company: str | None = None  # only set when kind == "external"
 
 
 class Team(MemoryFields):

@@ -41,37 +41,42 @@ class EmployeesScreen(Screen):
 
     def refresh_grid(self) -> None:
         kg = get_kg()
-        persons = kg.list_live("Person")
+        all_persons = kg.list_live("Person")
+        employees = [p for p in all_persons if p["fields"].get("kind") == "employee"]
         grid = self.query_one("#e-grid", Grid)
         for child in list(grid.children):
             child.remove()
 
-        if not persons:
-            self.query_one("#e-banner", Static).update("[dim]no persons in graph[/]")
+        if not employees:
+            self.query_one("#e-banner", Static).update(
+                "[dim]no employees yet — classify pending persons as employee[/]"
+            )
             return
 
         self.query_one("#e-banner", Static).update(
-            f"[#5BC8F5]{len(persons)}[/] employees"
+            f"[#5BC8F5]{len(employees)}[/] employees  "
+            f"[dim](of {len(all_persons)} persons total)[/]"
         )
 
-        for person in persons:
+        for person in employees:
             grid.mount(self._build_card(person, kg))
 
     def _build_card(self, person: dict, kg) -> Vertical:
         fields = person["fields"]
         name = fields.get("name", "—")
-        email = fields.get("email") or ""
+        emails = fields.get("emails") or []
+        email_display = emails[0] if emails else ""
         role = fields.get("role") or "—"
+        sub_roles = fields.get("sub_roles") or []
         confidence = person["confidence"]
         conf_color = "#2ECC71" if confidence >= 0.6 else ("#F5A623" if confidence >= 0.3 else "#E74C3C")
 
         photo_abs = photo_store.get_photo_path(fields.get("photo_path"))
 
-        # Collect memberships + projects via edges
-        edges = kg.neighbors(person["id"])
-        teams: list[str] = []
-        projects: list[str] = []
-        for e in edges:
+        # Teams: direct MEMBER_OF
+        # Projects: 2-hop via Team → RUNS → Project, plus direct AUTHORED docs
+        teams: list[tuple[str, str]] = []  # (team_id, label)
+        for e in kg.neighbors(person["id"]):
             if e["from_id"] != person["id"]:
                 continue
             target = kg.get_live(e["to_id"])
@@ -80,9 +85,27 @@ class EmployeesScreen(Screen):
             tname = target["fields"].get("name") or target["fields"].get("title") or "—"
             if e["type"] == "MEMBER_OF" and target["entity_type"] == "Team":
                 role_label = e["properties"].get("role")
-                teams.append(f"{tname}" + (f" ({role_label})" if role_label else ""))
-            elif e["type"] in ("RUNS", "AUTHORED") and target["entity_type"] == "Project":
-                projects.append(tname)
+                sub = e["properties"].get("sub_roles") or []
+                tag = role_label or ""
+                if sub:
+                    tag = (tag + " · " if tag else "") + ", ".join(sub)
+                label = f"{tname}" + (f" ({tag})" if tag else "")
+                teams.append((target["id"], label))
+
+        # 2-hop projects via teams the person is in
+        projects: list[str] = []
+        for team_id, _ in teams:
+            for e2 in kg.neighbors(team_id):
+                if e2["from_id"] != team_id or e2["type"] != "RUNS":
+                    continue
+                tgt = kg.get_live(e2["to_id"])
+                if tgt and tgt["entity_type"] == "Project":
+                    pname = tgt["fields"].get("name", "—")
+                    if pname not in projects:
+                        projects.append(pname)
+        team_labels = [label for _, label in teams]
+        # rebind for downstream code expecting `teams: list[str]`
+        teams = team_labels  # type: ignore[assignment]
 
         # Photo widget
         if Image is not None and photo_abs:
@@ -97,9 +120,14 @@ class EmployeesScreen(Screen):
         info_lines = [
             f"[bold #5BC8F5]{name}[/]",
             f"[#F5A623]{role}[/]" if role != "—" else "[dim]role unknown[/]",
-            f"[dim]{email}[/]" if email else "",
-            f"confidence [{conf_color}]{confidence:.2f}[/]",
         ]
+        if sub_roles:
+            info_lines.append(f"[#F5D020]+ {', '.join(sub_roles)}[/]")
+        if email_display:
+            info_lines.append(f"[dim]{email_display}[/]")
+        if len(emails) > 1:
+            info_lines.append(f"[dim](+{len(emails) - 1} more)[/]")
+        info_lines.append(f"confidence [{conf_color}]{confidence:.2f}[/]")
         info_widget = Static(
             "\n".join(line for line in info_lines if line),
             classes="emp-info",

@@ -125,6 +125,26 @@ class KnowledgeGraph:
             properties=properties,
         )
 
+    def remove_member_edge(self, person_id: str, team_id: str) -> int:
+        """Delete all MEMBER_OF edges from person to team. Returns count removed."""
+        edges = self.graph.find_edges(self.company_id, person_id, "MEMBER_OF", team_id)
+        for e in edges:
+            self.graph.delete_live_edge(e["id"])
+        return len(edges)
+
+    def delete_node(self, node_id: str) -> dict:
+        """Delete a live node + all its edges. Also drop vector embedding."""
+        result = self.graph.delete_live_node(self.company_id, node_id)
+        try:
+            self.vectors.delete(node_id)
+        except Exception:
+            pass
+        return result
+
+    def has_member_edge(self, person_id: str, team_id: str) -> bool:
+        edges = self.graph.find_edges(self.company_id, person_id, "MEMBER_OF", team_id)
+        return bool(edges)
+
     def pending_count(self) -> int:
         return self.graph.pending_count(self.company_id)
 

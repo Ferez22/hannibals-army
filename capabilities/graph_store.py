@@ -325,6 +325,34 @@ class GraphStore:
         return live_id
 
     # ---- Review queue ----
+    def delete_live_edge(self, edge_id: int) -> int:
+        with self.conn() as c:
+            cur = c.execute("DELETE FROM live_edges WHERE id = ?", (edge_id,))
+            return cur.rowcount
+
+    def find_edges(
+        self, company_id: str, from_id: str, type: str, to_id: str
+    ) -> list[dict]:
+        with self.conn() as c:
+            rows = c.execute(
+                """SELECT * FROM live_edges
+                   WHERE company_id = ? AND from_id = ? AND type = ? AND to_id = ?""",
+                (company_id, from_id, type, to_id),
+            ).fetchall()
+            return [_row_to_edge(r) for r in rows]
+
+    def delete_live_node(self, company_id: str, node_id: str) -> dict:
+        """Delete node + all its edges. Returns {edges_removed, node_removed}."""
+        with self.conn() as c:
+            removed_edges = c.execute(
+                "DELETE FROM live_edges WHERE company_id = ? AND (from_id = ? OR to_id = ?)",
+                (company_id, node_id, node_id),
+            ).rowcount
+            removed_node = c.execute(
+                "DELETE FROM live_nodes WHERE id = ?", (node_id,)
+            ).rowcount
+        return {"edges_removed": removed_edges, "node_removed": removed_node}
+
     def list_review_queue(
         self, company_id: str, kind: str | None = None, resolved: bool = False
     ) -> list[dict]:

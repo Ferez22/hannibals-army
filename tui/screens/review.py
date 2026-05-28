@@ -29,10 +29,12 @@ class ReviewScreen(Screen):
         yield Static("", id="r-banner")  # scan results, action confirmations
         with Horizontal():
             with Vertical():
-                yield DataTable(id="r-table", zebra_stripes=True)
                 with Horizontal(id="r-actions"):
-                    yield Button("Verify",   variant="success", id="r-verify")
-                    yield Button("Dismiss",  variant="default", id="r-dismiss")
+                    yield Button("Verify",         variant="success", id="r-verify")
+                    yield Button("Add as sub-role", variant="primary", id="r-subrole")
+                    yield Button("Replace role",   variant="warning", id="r-replace")
+                    yield Button("Dismiss",        variant="default", id="r-dismiss")
+                yield DataTable(id="r-table", zebra_stripes=True)
             yield Static("", id="r-detail")
         yield Footer()
 
@@ -135,6 +137,53 @@ class ReviewScreen(Screen):
         self.refresh_list()
         self.query_one("#r-banner", Static).update(
             f"[#2ECC71]verified[/] — {live_id} reset to now"
+        )
+
+    @on(Button.Pressed, "#r-subrole")
+    def add_as_subrole(self) -> None:
+        item = self._current()
+        banner = self.query_one("#r-banner", Static)
+        if not item:
+            banner.update("[red]no row selected[/]"); return
+        if item["kind"] != "role_conflict":
+            banner.update("[red]this action is only for role_conflict items[/]"); return
+        kg = get_kg()
+        live = kg.get_live(item["live_node_id"])
+        if not live:
+            banner.update("[red]live node gone[/]"); return
+        new_role = item["details"]["diffs"]["role"]["candidate"]
+        sub_roles = list(live["fields"].get("sub_roles") or [])
+        if new_role not in sub_roles:
+            sub_roles.append(new_role)
+        kg.update_live_field(live["id"], "sub_roles", sub_roles)
+        kg.graph.resolve_review(item["id"])
+        self.refresh_list()
+        banner.update(f"[#2ECC71]added sub-role[/] {new_role!r} on {live['id']}")
+
+    @on(Button.Pressed, "#r-replace")
+    def replace_role(self) -> None:
+        item = self._current()
+        banner = self.query_one("#r-banner", Static)
+        if not item:
+            banner.update("[red]no row selected[/]"); return
+        if item["kind"] != "role_conflict":
+            banner.update("[red]this action is only for role_conflict items[/]"); return
+        kg = get_kg()
+        live = kg.get_live(item["live_node_id"])
+        if not live:
+            banner.update("[red]live node gone[/]"); return
+        old_role = live["fields"].get("role")
+        new_role = item["details"]["diffs"]["role"]["candidate"]
+        # Move old primary role into sub_roles (so we don't lose it)
+        sub_roles = list(live["fields"].get("sub_roles") or [])
+        if old_role and old_role not in sub_roles and old_role != new_role:
+            sub_roles.append(old_role)
+        kg.update_live_field(live["id"], "role", new_role)
+        kg.update_live_field(live["id"], "sub_roles", sub_roles)
+        kg.graph.resolve_review(item["id"])
+        self.refresh_list()
+        banner.update(
+            f"[#2ECC71]replaced primary role[/] {old_role!r} → {new_role!r} (old kept as sub-role)"
         )
 
     @on(Button.Pressed, "#r-dismiss")

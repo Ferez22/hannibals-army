@@ -57,13 +57,17 @@ def is_generic_email(email: str | None) -> bool:
 
 # ---------------------------------------------------------------------------
 def find_existing_person(extracted: dict[str, Any], live_persons: list[dict]) -> str | None:
-    ext_email = (extracted.get("email") or "").lower().strip() or None
+    # Extracted emails: support both legacy "email" (str) and new "emails" (list)
+    raw_emails = extracted.get("emails") or ([extracted.get("email")] if extracted.get("email") else [])
+    ext_emails = {e.lower().strip() for e in raw_emails if e and isinstance(e, str)}
+    ext_emails = {e for e in ext_emails if e and not is_generic_email(e)}
     ext_tokens = normalize_tokens(extracted.get("name"))
 
-    # Strict: email match
-    if ext_email and not is_generic_email(ext_email):
+    # Strict: any email overlap
+    if ext_emails:
         for p in live_persons:
-            if (p["fields"].get("email") or "").lower().strip() == ext_email:
+            live_emails = {e.lower().strip() for e in (p["fields"].get("emails") or []) if e}
+            if ext_emails & live_emails:
                 return p["id"]
 
     # Fallback: token-set match on name

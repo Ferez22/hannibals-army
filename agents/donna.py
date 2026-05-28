@@ -49,22 +49,42 @@ def is_stale(node: dict) -> bool:
 def detect_conflict(entity_type: str, candidate: dict, live: dict) -> dict | None:
     """Return a conflict description if candidate disagrees with existing live, else None.
 
-    Per-entity rules from the plan:
-      Person : same name+email match → any other field differs → conflict
-      Rule   : same title match → content cosine < 0.85 → conflict
-      Project: same name → status changed → NOT conflict, just update
-      Team   : same name → lead_id or parent_team_id differs → conflict
+    Per-entity rules:
+      Person  : role differs → role_conflict (user picks: sub-role / replace / dismiss)
+                kind differs → kind_conflict
+                external_company differs → conflict
+                new emails → auto-merge, NO conflict (Cartographer handles)
+                Other fields differ → standard conflict
+      Rule    : same title → content sim < 0.85 → conflict
+      Project : status change is OK, not conflict
+      Team    : same name → lead_id or parent differs → conflict
     """
     cand_f = candidate
     live_f = live["fields"]
 
     if entity_type == "Person":
-        diffs = {}
-        for key in ("role", "email"):
-            cv = (cand_f.get(key) or "").strip().lower()
-            lv = (live_f.get(key) or "").strip().lower()
-            if cv and lv and cv != lv:
-                diffs[key] = {"live": lv, "candidate": cv}
+        diffs: dict = {}
+        # role: special — flagged as role_conflict for action-picker
+        cv_role = (cand_f.get("role") or "").strip()
+        lv_role = (live_f.get("role") or "").strip()
+        if cv_role and lv_role and cv_role.lower() != lv_role.lower():
+            # Only flag if candidate isn't already in live sub_roles
+            existing_sub = {s.lower() for s in (live_f.get("sub_roles") or [])}
+            if cv_role.lower() not in existing_sub:
+                diffs["role"] = {"live": lv_role, "candidate": cv_role}
+
+        # kind: identity-level conflict
+        cv_kind = cand_f.get("kind")
+        lv_kind = live_f.get("kind")
+        if cv_kind and lv_kind and cv_kind != "unknown" and cv_kind != lv_kind:
+            diffs["kind"] = {"live": lv_kind, "candidate": cv_kind}
+
+        # external_company
+        cv_company = (cand_f.get("external_company") or "").strip()
+        lv_company = (live_f.get("external_company") or "").strip()
+        if cv_company and lv_company and cv_company.lower() != lv_company.lower():
+            diffs["external_company"] = {"live": lv_company, "candidate": cv_company}
+
         if diffs:
             return {"diffs": diffs}
         return None

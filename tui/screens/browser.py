@@ -8,7 +8,7 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
-from textual.widgets import DataTable, Footer, Header, Static
+from textual.widgets import Button, DataTable, Footer, Header, Static
 
 from agents.donna import is_stale
 from core.ingestion_pipeline import get_kg
@@ -29,8 +29,12 @@ class BrowserScreen(Screen):
     def compose(self) -> ComposeResult:
         yield Header()
         yield Static("", id="b-title", classes="section-title")
+        yield Static("", id="b-banner")
         with Horizontal():
-            yield DataTable(id="b-table", zebra_stripes=True)
+            with Vertical():
+                with Horizontal(id="b-actions"):
+                    yield Button("Delete node", variant="error", id="b-delete")
+                yield DataTable(id="b-table", zebra_stripes=True)
             yield Static("", id="b-detail")
         yield Footer()
 
@@ -72,8 +76,45 @@ class BrowserScreen(Screen):
             table.add_row(n["id"][:24], name_cell, conf_cell)
         self.query_one("#b-detail", Static).update("[dim]select a row to inspect[/]")
 
+    def _current_node(self) -> dict | None:
+        table = self.query_one("#b-table", DataTable)
+        if table.cursor_row is None or table.cursor_row < 0:
+            return None
+        et = ENTITY_TYPES[self.current_type_idx]
+        nodes = get_kg().list_live(et)
+        if not nodes or table.cursor_row >= len(nodes):
+            return None
+        return nodes[table.cursor_row]
+
+    @on(Button.Pressed, "#b-delete")
+    def delete_node(self) -> None:
+        node = self._current_node()
+        banner = self.query_one("#b-banner", Static)
+        if not node:
+            banner.update("[red]no row selected[/]")
+            return
+        # Two-click confirmation
+        confirm_key = node["id"]
+        if getattr(self, "_delete_confirmed", None) != confirm_key:
+            self._delete_confirmed = confirm_key
+            name = node["fields"].get("name") or node["fields"].get("title") or node["id"]
+            banner.update(
+                f"[bold #F5D020]⚠ Delete {node['entity_type']} '{name}'?[/]  "
+                f"This removes the node + all its edges. Click [bold]Delete node[/] again to confirm."
+            )
+            return
+        self._delete_confirmed = None
+        result = get_kg().delete_node(node["id"])
+        banner.update(
+            f"[#E74C3C]deleted[/] {node['id']}  "
+            f"(edges removed: {result['edges_removed']})"
+        )
+        self.refresh_type()
+
     @on(DataTable.RowHighlighted)
     def on_row(self, event: DataTable.RowHighlighted) -> None:
+        # Reset delete confirmation when cursor moves
+        self._delete_confirmed = None
         if event.cursor_row is None or event.cursor_row < 0:
             return
         et = ENTITY_TYPES[self.current_type_idx]

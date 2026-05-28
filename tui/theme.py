@@ -127,14 +127,19 @@ RichLog {
     border: tall #4A5568;
     padding: 0 1;
 }
-#p-actions, #r-actions {
+#p-actions, #r-actions, #b-actions {
     height: 3;
     align-horizontal: left;
     width: 50%;
+    margin: 0;
+    padding: 0;
 }
-#p-actions Button, #r-actions Button {
-    width: 14;
-    margin: 0 1;
+#p-actions Button, #r-actions Button, #b-actions Button {
+    min-width: 10;
+    width: auto;
+    height: 3;
+    margin: 0 1 0 0;
+    padding: 0 1;
 }
 
 /* Ingest input row layout */
@@ -156,6 +161,35 @@ Horizontal {
 }
 #a-form Button {
     width: 14;
+}
+
+/* Edges form */
+#ed-form {
+    padding: 1 2;
+    height: auto;
+}
+.ed-row {
+    height: auto;
+    margin: 0 0 1 0;
+}
+.ed-label {
+    width: 8;
+    color: #F5A623;
+    text-style: bold;
+    content-align-vertical: middle;
+}
+#ed-form Select, #ed-form Input {
+    width: 1fr;
+}
+#ed-form Button {
+    width: 16;
+    margin-left: 8;
+}
+#ed-existing {
+    border: tall #4A5568;
+    padding: 1 1;
+    height: 1fr;
+    margin: 1 2;
 }
 
 /* Employees grid */
@@ -188,5 +222,63 @@ Horizontal {
     padding-top: 1;
     border-top: tall #4A5568;
     height: auto;
+}
+
+/* Externals get an orange border to distinguish from employees */
+.ext-card {
+    border: tall #F5A623;
+    padding: 1 1;
+    height: auto;
+    background: #161B22;
+}
+
+/* Externals grid */
+#x-grid {
+    grid-size: 2;
+    grid-gutter: 1 2;
+    padding: 1 2;
+    height: 1fr;
+}
+
+/* Pending external promotion inline form */
+#p-extform {
+    margin-top: 1;
+    height: auto;
+}
+#p-extform Input {
+    margin: 1 0;
+}
+
+/* Teams screen */
+.t-row {
+    height: auto;
+    margin: 0;
+}
+.t-row Input, .t-row Select, .t-row Button {
+    width: 1fr;
+    margin: 0 1 0 0;
+    padding: 0 1;
+}
+.t-row Button {
+    width: 14;
+    height: 3;
+}
+#t-table {
+    width: 1fr;
+    height: 12;
+}
+#t-detail {
+    border: tall #4A5568;
+    padding: 1 1;
+    height: 12;
+}
+#t-add-form {
+    height: auto;
+    padding: 0 1;
+}
+#t-warning {
+    color: #F5D020;
+    height: auto;
+    margin: 1 0;
 }
 """

@@ -6,12 +6,15 @@ from textual.app import App
 import config
 from tui.screens.attach import AttachScreen
 from tui.screens.browser import BrowserScreen
+from tui.screens.edges import EdgesScreen
 from tui.screens.employees import EmployeesScreen
+from tui.screens.externals import ExternalsScreen
 from tui.screens.home import HomeScreen
 from tui.screens.ingest import IngestScreen
 from tui.screens.pending import PendingScreen
 from tui.screens.query import QueryScreen
 from tui.screens.review import ReviewScreen
+from tui.screens.teams import TeamsScreen
 from tui.theme import CSS
 
 
@@ -29,6 +32,9 @@ class HannibalsArmyApp(App):
         "review":    ReviewScreen,
         "attach":    AttachScreen,
         "employees": EmployeesScreen,
+        "externals": ExternalsScreen,
+        "teams":     TeamsScreen,
+        "edges":     EdgesScreen,
     }
 
     BINDINGS = [
@@ -39,7 +45,10 @@ class HannibalsArmyApp(App):
         ("p", "goto('pending')",   "Pending"),
         ("v", "goto('review')",    "Review"),
         ("e", "goto('employees')", "Employees"),
+        ("x", "goto('externals')", "Externals"),
+        ("t", "goto('teams')",     "Teams"),
         ("a", "goto('attach')",    "Attach"),
+        ("g", "goto('edges')",     "Edges"),
         ("escape", "back",         "Back"),
     ]
 

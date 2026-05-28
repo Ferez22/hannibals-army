@@ -7,7 +7,7 @@ from typing import Any
 import config
 from agents.base_agent import AgentResult, BaseAgent
 from agents.donna import detect_conflict
-from capabilities import dedup, extractor, promotion
+from capabilities import dedup, extractor, promotion, yaml_sync
 from core.entity_types import RawDocument
 from core.knowledge_graph import KnowledgeGraph
 
@@ -28,10 +28,17 @@ def _entity_description(entity_type: str, fields: dict[str, Any]) -> str:
     """Compact text representation for vector embedding."""
     if entity_type == "Person":
         parts = [fields.get("name", "")]
-        if fields.get("email"):
-            parts.append(f"email {fields['email']}")
+        if fields.get("kind"):
+            parts.append(fields["kind"])
+        if fields.get("external_company"):
+            parts.append(f"at {fields['external_company']}")
+        emails = fields.get("emails") or []
+        if emails:
+            parts.append(f"email {emails[0]}")
         if fields.get("role"):
             parts.append(f"role {fields['role']}")
+        if fields.get("sub_roles"):
+            parts.append("also " + ", ".join(fields["sub_roles"]))
         return ", ".join(p for p in parts if p)
     if entity_type == "Team":
         return f"Team: {fields.get('name', '')}"
@@ -108,13 +115,33 @@ class Cartographer(BaseAgent):
                 existing_id = dedup.find_existing(entity_type, item, existing_live)
                 if existing_id:
                     live_node = next((n for n in existing_live if n["id"] == existing_id), None)
-                    # Conflict check before bumping
                     candidate_fields = _to_storage_fields(entity_type, item)
+
+                    # Auto-merge new emails into existing Person (not a conflict)
+                    if entity_type == "Person" and live_node:
+                        live_emails = set(live_node["fields"].get("emails") or [])
+                        new_emails = set(candidate_fields.get("emails") or [])
+                        added_emails = new_emails - live_emails
+                        if added_emails:
+                            merged = list(live_emails | new_emails)
+                            self.kg.update_live_field(existing_id, "emails", merged)
+                            log.info(
+                                "emails_auto_merged",
+                                extra={"live_id": existing_id, "added": list(added_emails)},
+                            )
+
+                    # Conflict check before bumping
                     conflict = detect_conflict(entity_type, candidate_fields, live_node) if live_node else None
                     if conflict:
+                        # Tag as role_conflict when only role differs — Review screen offers
+                        # "Add as sub-role" / "Replace" / "Dismiss" actions
+                        review_kind = "role_conflict" if (
+                            entity_type == "Person"
+                            and set(conflict["diffs"].keys()) == {"role"}
+                        ) else "conflict"
                         self.kg.graph.queue_for_review(
                             company_id=self.kg.company_id,
-                            kind="conflict",
+                            kind=review_kind,
                             entity_type=entity_type,
                             live_node_id=existing_id,
                             candidate_node_id=None,
@@ -204,6 +231,19 @@ class Cartographer(BaseAgent):
                 )
                 edges_added += 1
 
+        # Sync YAML mirror if anything changed
+        any_change = (
+            any(promoted_ids.values())
+            or any(staged_ids.values())
+            or bumped_ids
+            or edges_added
+        )
+        if any_change:
+            try:
+                yaml_sync.sync_company_config(self.kg)
+            except Exception as e:
+                log.warning("yaml_sync_failed", extra={"error": str(e)})
+
         return AgentResult(
             True,
             data={
@@ -220,10 +260,18 @@ class Cartographer(BaseAgent):
 def _to_storage_fields(entity_type: str, item: dict[str, Any]) -> dict[str, Any]:
     """Normalize extractor output into storage-shaped fields."""
     if entity_type == "Person":
+        email = (item.get("email") or "").strip()
+        emails = [e.strip() for e in (item.get("emails") or []) if isinstance(e, str) and e.strip()]
+        if email and email not in emails:
+            emails.append(email)
         return {
             "name": item.get("name", "").strip(),
-            "email": (item.get("email") or "").strip() or None,
+            "kind": "unknown",                    # default; user classifies in Pending
+            "emails": emails,
             "role": (item.get("role") or "").strip() or None,
+            "sub_roles": [],
+            "external_company": None,
+            "photo_path": None,
         }
     if entity_type == "Team":
         return {

@@ -23,10 +23,20 @@ def should_auto_promote(
     company_seeded_names = company_seeded_names or set()
 
     if entity_type == "Person":
-        email = fields.get("email")
-        if email and not is_generic_email(email):
-            return True, None
-        return False, "awaiting_corroboration"  # no email → needs human
+        kind = fields.get("kind", "unknown")
+        if kind == "unknown":
+            return False, "needs_categorization"
+        if kind == "employee":
+            emails = fields.get("emails") or []
+            non_generic = [e for e in emails if e and not is_generic_email(e)]
+            if non_generic:
+                return True, None
+            return False, "awaiting_corroboration"
+        if kind == "external":
+            if fields.get("external_company"):
+                return True, None
+            return False, "needs_external_company"
+        return False, "needs_categorization"
 
     if entity_type == "Team":
         name = (fields.get("name") or "").lower().strip()

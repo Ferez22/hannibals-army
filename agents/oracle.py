@@ -22,6 +22,38 @@ __NODES__
 ANSWER (concise, 1-3 sentences, cite node ids in parentheses like (person_abc123)):"""
 
 
+SUMMARY_PROMPT = """You are ORACLE. Below is the FULL inventory of the company knowledge graph, grouped by entity type. Give a concise, structured answer to the question using this inventory. Do not invent facts beyond what is listed.
+
+QUESTION:
+__QUESTION__
+
+INVENTORY:
+__INVENTORY__
+
+ANSWER (organized by category if useful, cite node ids like (person_abc123)):"""
+
+
+SUMMARY_TRIGGERS = (
+    "tell me about",
+    "what do you know",
+    "what can you tell",
+    "overview",
+    "summary",
+    "summarize",
+    "describe the company",
+    "who works",
+    "list all",
+    "show all",
+    "what teams",
+    "what projects",
+)
+
+
+def _is_summary_question(question: str) -> bool:
+    q = question.lower().strip()
+    return any(t in q for t in SUMMARY_TRIGGERS)
+
+
 class Oracle(BaseAgent):
     name = "ORACLE"
     tagline = "query engine — answers from cited nodes only"
@@ -39,16 +71,17 @@ class Oracle(BaseAgent):
         if self.kg is None:
             return AgentResult(False, error="oracle has no KG bound")
 
+        # Summary mode: broad questions get the full inventory
+        if _is_summary_question(question):
+            return self._summary_answer(question)
+
         # Vector search → seed nodes
         hits = self.kg.search(question, k=k)
         log.info("oracle_vector_hits", extra={"count": len(hits)})
 
         if not hits:
-            return AgentResult(
-                True,
-                data="I don't know based on what's in the knowledge graph (no relevant nodes found).",
-                cited_nodes=[],
-            )
+            # Fallback: also try summary mode if no hits
+            return self._summary_answer(question)
 
         # Expand 1-hop neighborhood per seed
         expanded: dict[str, dict] = {}
@@ -86,6 +119,48 @@ class Oracle(BaseAgent):
         nodes_text = "\n".join(nodes_text_lines)
         answer = _call_llm(question, nodes_text)
         return AgentResult(True, data=answer, cited_nodes=list(expanded.keys()))
+
+
+    def _summary_answer(self, question: str) -> AgentResult:
+        """Inventory-based answer for broad questions."""
+        if self.kg is None:
+            return AgentResult(False, error="oracle has no KG bound")
+        sections: list[str] = []
+        all_ids: list[str] = []
+        for et in ("Person", "Team", "Project", "Rule", "Event", "Document"):
+            nodes = self.kg.list_live(et)
+            if not nodes:
+                continue
+            sections.append(f"## {et} ({len(nodes)})")
+            for n in nodes[:30]:  # cap per type to keep prompt manageable
+                f = n["fields"]
+                label = f.get("name") or f.get("title") or "(unnamed)"
+                extras: list[str] = []
+                for key in ("email", "role", "status", "date", "type", "category"):
+                    if f.get(key):
+                        extras.append(f"{key}={f[key]}")
+                extra_s = "  " + ", ".join(extras) if extras else ""
+                sections.append(f"- ({n['id']}) {label}{extra_s}")
+                all_ids.append(n["id"])
+
+        if not sections:
+            return AgentResult(
+                True,
+                data="The knowledge graph is empty. Ingest some documents first.",
+                cited_nodes=[],
+            )
+
+        inventory_text = "\n".join(sections)
+        log.info("oracle_summary_mode", extra={"entities": len(all_ids)})
+        prompt = SUMMARY_PROMPT.replace("__QUESTION__", question).replace("__INVENTORY__", inventory_text)
+        import ollama
+        response = ollama.generate(
+            model=config.MASTER_MODEL,
+            prompt=prompt,
+            options={"temperature": 0.0},
+        )
+        answer = response.get("response", "").strip()
+        return AgentResult(True, data=answer, cited_nodes=all_ids)
 
 
 def _call_llm(question: str, nodes_text: str) -> str:

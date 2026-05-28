@@ -1,6 +1,8 @@
 .env
 digital-twin-config.yml
 company-config.yml
+google_credentials.json
+google_token.json
 data/*
 trip_plans/*
 
