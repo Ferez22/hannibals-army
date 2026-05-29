@@ -133,13 +133,48 @@ class KnowledgeGraph:
         return len(edges)
 
     def delete_node(self, node_id: str) -> dict:
-        """Delete a live node + all its edges. Also drop vector embedding."""
+        """Delete a live node + all its edges. Also drop vector embedding.
+        For Document nodes, also drop chunks (sql + vector)."""
+        node = self.graph.get_live_node(node_id)
         result = self.graph.delete_live_node(self.company_id, node_id)
         try:
             self.vectors.delete(node_id)
         except Exception:
             pass
+        if node and node["entity_type"] == "Document":
+            try:
+                self.graph.delete_chunks_for_doc(node_id)
+                self.vectors.delete_chunks_for_doc(node_id)
+            except Exception:
+                pass
         return result
+
+    # ---- Chunks ----
+    def add_chunks(self, doc_id: str, doc_title: str, chunks: list) -> int:
+        """Persist chunks to SQL + Chroma. Returns count added."""
+        added = 0
+        for ch in chunks:
+            chunk_id = self.graph.insert_chunk(
+                company_id=self.company_id,
+                doc_id=doc_id,
+                ordinal=ch.ordinal,
+                text=ch.text,
+                char_start=ch.char_start,
+                char_end=ch.char_end,
+            )
+            self.vectors.add_chunk(
+                chunk_id=chunk_id,
+                text=ch.text,
+                company_id=self.company_id,
+                doc_id=doc_id,
+                doc_title=doc_title,
+                ordinal=ch.ordinal,
+            )
+            added += 1
+        return added
+
+    def search_chunks(self, query: str, k: int = 5) -> list[dict]:
+        return self.vectors.search_chunks(query=query, company_id=self.company_id, k=k)
 
     def has_member_edge(self, person_id: str, team_id: str) -> bool:
         edges = self.graph.find_edges(self.company_id, person_id, "MEMBER_OF", team_id)

@@ -69,8 +69,10 @@ class HomeScreen(Screen):
             counts.append(f"  {et:9s} [bold #5BC8F5]{n}[/]")
         pending = kg.pending_count()
         review = len(kg.graph.list_review_queue(kg.company_id))
+        chunks = kg.vectors.chunk_count()
         counts.append(f"  [#F5D020]Pending[/]   [bold]{pending}[/]")
         counts.append(f"  [#F5A623]Review[/]    [bold]{review}[/]")
+        counts.append(f"  [#5BC8F5]Chunks[/]    [bold]{chunks}[/] [dim](doc passages indexed for chat)[/]")
         self.query_one("#kg-block", Static).update("\n".join(counts))
 
         # Status bar

@@ -98,6 +98,20 @@ CREATE TABLE IF NOT EXISTS pending_blacklist (
     blacklisted_until TEXT NOT NULL,
     PRIMARY KEY (company_id, name_normalized, entity_type)
 );
+
+CREATE TABLE IF NOT EXISTS document_chunks (
+    id TEXT PRIMARY KEY,
+    company_id TEXT NOT NULL,
+    doc_id TEXT NOT NULL,
+    ordinal INTEGER NOT NULL,
+    text TEXT NOT NULL,
+    char_start INTEGER,
+    char_end INTEGER,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (doc_id) REFERENCES live_nodes(id)
+);
+CREATE INDEX IF NOT EXISTS idx_doc_chunks_company ON document_chunks(company_id);
+CREATE INDEX IF NOT EXISTS idx_doc_chunks_doc ON document_chunks(doc_id);
 """
 
 
@@ -352,6 +366,49 @@ class GraphStore:
                 "DELETE FROM live_nodes WHERE id = ?", (node_id,)
             ).rowcount
         return {"edges_removed": removed_edges, "node_removed": removed_node}
+
+    # ---- Document chunks ----
+    def insert_chunk(
+        self,
+        *,
+        company_id: str,
+        doc_id: str,
+        ordinal: int,
+        text: str,
+        char_start: int | None = None,
+        char_end: int | None = None,
+    ) -> str:
+        cid = f"chunk_{uuid.uuid4().hex[:12]}"
+        now = datetime.now().isoformat()
+        with self.conn() as c:
+            c.execute(
+                """INSERT INTO document_chunks
+                   (id, company_id, doc_id, ordinal, text, char_start, char_end, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                (cid, company_id, doc_id, ordinal, text, char_start, char_end, now),
+            )
+        return cid
+
+    def get_chunk(self, chunk_id: str) -> dict | None:
+        with self.conn() as c:
+            row = c.execute("SELECT * FROM document_chunks WHERE id = ?", (chunk_id,)).fetchone()
+        if not row:
+            return None
+        return {
+            "id": row["id"],
+            "company_id": row["company_id"],
+            "doc_id": row["doc_id"],
+            "ordinal": row["ordinal"],
+            "text": row["text"],
+            "char_start": row["char_start"],
+            "char_end": row["char_end"],
+            "created_at": row["created_at"],
+        }
+
+    def delete_chunks_for_doc(self, doc_id: str) -> int:
+        with self.conn() as c:
+            cur = c.execute("DELETE FROM document_chunks WHERE doc_id = ?", (doc_id,))
+            return cur.rowcount
 
     def list_review_queue(
         self, company_id: str, kind: str | None = None, resolved: bool = False

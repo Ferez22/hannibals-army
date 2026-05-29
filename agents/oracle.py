@@ -11,15 +11,21 @@ from core.knowledge_graph import KnowledgeGraph
 log = logging.getLogger("hannibal.oracle")
 
 
-ANSWER_PROMPT = """You are ORACLE, the company knowledge oracle. Answer the question STRICTLY from the cited nodes below. Do not invent facts. If the cited nodes do not contain the answer, say "I don't know based on what's in the knowledge graph."
+ANSWER_PROMPT = """You are ORACLE. Answer the question using ONLY the sources below. The sources include knowledge-graph entities (with ids like `person_abc123`) and document quotes (with citations like `(Handbook.docx, chunk 3)`).
+
+Rules:
+- Read every source carefully — document quotes may contain the answer even if it's a single line or a small detail.
+- Quote or paraphrase relevant text from the document quotes.
+- Cite every fact you use, in parentheses.
+- ONLY if NONE of the sources contain anything relevant to the question, reply exactly: "I don't know based on what's in the knowledge graph."
 
 QUESTION:
 __QUESTION__
 
-CITED NODES:
-__NODES__
+SOURCES:
+__SOURCES__
 
-ANSWER (concise, 1-3 sentences, cite node ids in parentheses like (person_abc123)):"""
+ANSWER:"""
 
 
 SUMMARY_PROMPT = """You are ORACLE. Below is the FULL inventory of the company knowledge graph, grouped by entity type. Give a concise, structured answer to the question using this inventory. Do not invent facts beyond what is listed.
@@ -75,17 +81,20 @@ class Oracle(BaseAgent):
         if _is_summary_question(question):
             return self._summary_answer(question)
 
-        # Vector search → seed nodes
-        hits = self.kg.search(question, k=k)
-        log.info("oracle_vector_hits", extra={"count": len(hits)})
+        # Hybrid retrieval: entities + document chunks
+        node_hits = self.kg.search(question, k=k)
+        chunk_hits = self.kg.search_chunks(question, k=k)
+        log.info(
+            "oracle_hits",
+            extra={"nodes": len(node_hits), "chunks": len(chunk_hits)},
+        )
 
-        if not hits:
-            # Fallback: also try summary mode if no hits
+        if not node_hits and not chunk_hits:
             return self._summary_answer(question)
 
-        # Expand 1-hop neighborhood per seed
+        # Expand 1-hop neighborhood per node seed
         expanded: dict[str, dict] = {}
-        for hit in hits:
+        for hit in node_hits:
             node = self.kg.get_live(hit["node_id"])
             if not node:
                 continue
@@ -96,29 +105,58 @@ class Oracle(BaseAgent):
                 if neighbor and neighbor["id"] not in expanded:
                     expanded[neighbor["id"]] = neighbor
 
-        # Build citation block
-        nodes_text_lines: list[str] = []
-        for nid, node in expanded.items():
-            f = node["fields"]
-            summary = f.get("name") or f.get("title") or "(unnamed)"
-            extras = {k: v for k, v in f.items() if k not in ("name", "title") and v}
-            nodes_text_lines.append(
-                f"- ({nid}) [{node['entity_type']}] {summary}  {extras if extras else ''}"
-            )
+        # Build sources block: entities + chunks
+        source_lines: list[str] = []
+        cited_ids: list[str] = []
 
-        # Add edges
-        for nid, node in expanded.items():
-            for edge in self.kg.neighbors(nid):
-                if edge["from_id"] in expanded and edge["to_id"] in expanded:
-                    role = edge["properties"].get("role", "")
-                    role_s = f" (role: {role})" if role else ""
-                    nodes_text_lines.append(
-                        f"  edge: ({edge['from_id']}) -{edge['type']}-> ({edge['to_id']}){role_s}"
-                    )
+        if expanded:
+            source_lines.append("[Knowledge graph entities]")
+            for nid, node in expanded.items():
+                f = node["fields"]
+                summary = f.get("name") or f.get("title") or "(unnamed)"
+                extras = {k: v for k, v in f.items() if k not in ("name", "title") and v}
+                source_lines.append(
+                    f"- ({nid}) [{node['entity_type']}] {summary}  {extras if extras else ''}"
+                )
+                cited_ids.append(nid)
+            for nid in list(expanded.keys()):
+                for edge in self.kg.neighbors(nid):
+                    if edge["from_id"] in expanded and edge["to_id"] in expanded:
+                        role = edge["properties"].get("role", "")
+                        role_s = f" (role: {role})" if role else ""
+                        source_lines.append(
+                            f"  edge: ({edge['from_id']}) -{edge['type']}-> ({edge['to_id']}){role_s}"
+                        )
 
-        nodes_text = "\n".join(nodes_text_lines)
-        answer = _call_llm(question, nodes_text)
-        return AgentResult(True, data=answer, cited_nodes=list(expanded.keys()))
+        if chunk_hits:
+            source_lines.append("\n[Document quotes]")
+            for ch in chunk_hits:
+                doc_title = ch.get("doc_title") or ch.get("doc_id")
+                ordinal = ch.get("ordinal", "?")
+                snippet = ch.get("text", "").strip()
+                if len(snippet) > 600:
+                    snippet = snippet[:600] + "…"
+                citation = f"({doc_title}, chunk {ordinal})"
+                source_lines.append(f"- {citation}\n  \"{snippet}\"")
+                cited_ids.append(ch["chunk_id"])
+
+        sources_text = "\n".join(source_lines)
+        answer = _call_llm(question, sources_text)
+        diag = {
+            "entities_found": len(node_hits),
+            "chunks_found": len(chunk_hits),
+            "entities_expanded": len(expanded),
+            "top_chunk_distances": [round(ch["distance"], 3) for ch in chunk_hits[:3]],
+            "top_chunk_previews": [
+                f"({ch.get('doc_title')}, ch {ch.get('ordinal')}): {ch.get('text', '')[:120]!r}"
+                for ch in chunk_hits[:3]
+            ],
+        }
+        return AgentResult(
+            True,
+            data={"answer": answer, "diag": diag},
+            cited_nodes=cited_ids,
+        )
 
 
     def _summary_answer(self, question: str) -> AgentResult:
@@ -146,7 +184,8 @@ class Oracle(BaseAgent):
         if not sections:
             return AgentResult(
                 True,
-                data="The knowledge graph is empty. Ingest some documents first.",
+                data={"answer": "The knowledge graph is empty. Ingest some documents first.",
+                      "diag": {"entities_found": 0, "chunks_found": 0}},
                 cited_nodes=[],
             )
 
@@ -160,13 +199,17 @@ class Oracle(BaseAgent):
             options={"temperature": 0.0},
         )
         answer = response.get("response", "").strip()
-        return AgentResult(True, data=answer, cited_nodes=all_ids)
+        return AgentResult(
+            True,
+            data={"answer": answer, "diag": {"mode": "summary", "entities_in_inventory": len(all_ids)}},
+            cited_nodes=all_ids,
+        )
 
 
-def _call_llm(question: str, nodes_text: str) -> str:
+def _call_llm(question: str, sources_text: str) -> str:
     import ollama
 
-    prompt = ANSWER_PROMPT.replace("__QUESTION__", question).replace("__NODES__", nodes_text)
+    prompt = ANSWER_PROMPT.replace("__QUESTION__", question).replace("__SOURCES__", sources_text)
     response = ollama.generate(
         model=config.MASTER_MODEL,
         prompt=prompt,

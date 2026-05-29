@@ -52,10 +52,29 @@ class QueryScreen(Screen):
             self.app.call_from_thread(log.write, f"[red]FAIL:[/] {result.error}")
             return
 
-        self.app.call_from_thread(log.write, f"[#2ECC71]A:[/] {result.data}")
+        # data can be str (legacy) or {"answer": str, "diag": dict}
+        answer = result.data
+        diag = None
+        if isinstance(result.data, dict):
+            answer = result.data.get("answer", "")
+            diag = result.data.get("diag")
+
+        # Retrieval stats line (yellow) — visible BEFORE the answer
+        if diag:
+            ents = diag.get("entities_found", "-")
+            chunks = diag.get("chunks_found", "-")
+            self.app.call_from_thread(
+                log.write,
+                f"[#F5D020]retrieved:[/] entities={ents}  chunks={chunks}",
+            )
+            previews = diag.get("top_chunk_previews", [])
+            for p in previews:
+                self.app.call_from_thread(log.write, f"[dim]  ▸ {p}[/]")
+
+        self.app.call_from_thread(log.write, f"[#2ECC71]A:[/] {answer}")
         if result.cited_nodes:
             self.app.call_from_thread(
                 log.write,
-                f"[dim]cited {len(result.cited_nodes)} nodes: {', '.join(result.cited_nodes[:5])}[/]",
+                f"[dim]cited {len(result.cited_nodes)} sources: {', '.join(result.cited_nodes[:5])}[/]",
             )
         self.app.call_from_thread(log.write, "")

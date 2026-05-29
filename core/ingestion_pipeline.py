@@ -11,6 +11,7 @@ import config
 from agents.base_agent import AgentResult
 from agents.cartographer import CARTOGRAPHER
 from agents.ragnar import RAGNAR
+from capabilities import chunker
 from core.entity_types import RawDocument
 from core.knowledge_graph import KnowledgeGraph
 from core.system_status import SystemStatus
@@ -82,6 +83,19 @@ def ingest(source: str) -> AgentResult:
         f"Document: {raw_doc.metadata.get('filename', raw_doc.source)} ({raw_doc.format})",
     )
     log.info("pipeline_document_promoted", extra={"doc_id": doc_live_id})
+
+    # 2b. Chunk + embed the full text for document chat (RAG)
+    try:
+        chunks = chunker.chunk_text(raw_doc.raw_text)
+        if chunks:
+            added = kg.add_chunks(
+                doc_id=doc_live_id,
+                doc_title=raw_doc.metadata.get("filename", raw_doc.source),
+                chunks=chunks,
+            )
+            log.info("pipeline_chunks_added", extra={"doc_id": doc_live_id, "count": added})
+    except Exception as e:
+        log.warning("chunking_failed", extra={"doc_id": doc_live_id, "error": str(e)})
 
     # 3. CARTOGRAPHER extracts entities
     cart = CARTOGRAPHER.invoke({"raw_doc": raw_doc, "doc_node_id": doc_live_id})
