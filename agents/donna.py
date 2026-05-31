@@ -129,6 +129,7 @@ class Donna(BaseAgent):
 
         task: {"action": "scan_staleness"}   → scan all live, queue stale ones
               {"action": "scan_count"}       → return counts (cheap)
+              {"action": "scan_all"}         → staleness scan + conflict summary + Telegram digest + log
         """
         if self.kg is None:
             return AgentResult(False, error="DONNA has no KG bound")
@@ -139,6 +140,8 @@ class Donna(BaseAgent):
             return self._scan_staleness()
         if action == "scan_count":
             return self._scan_count()
+        if action == "scan_all":
+            return self._scan_all()
         return AgentResult(False, error=f"unknown action: {action}")
 
     def _scan_count(self) -> AgentResult:
@@ -197,6 +200,74 @@ class Donna(BaseAgent):
             data={
                 "queued_review": queued_review,
                 "queued_notifications": queued_notifications,
+            },
+        )
+
+
+    def _scan_all(self) -> AgentResult:
+        """Full scan: staleness + open conflicts + Telegram digest + record in scan_log.
+
+        Composes _scan_staleness() then summarises stale + unresolved conflicts
+        from the review_queue. Returns a dict with everything that was queued.
+        """
+        if self.kg is None:
+            return AgentResult(False, error="DONNA has no KG bound")
+
+        stale_res = self._scan_staleness()
+        if not stale_res.success:
+            return stale_res
+        stale_data = stale_res.data or {}
+
+        # Collect concrete items from review_queue for digest
+        review_items = self.kg.graph.list_review_queue(self.kg.company_id, resolved=False)
+        stale_rules: list[dict] = []
+        stale_other: list[dict] = []
+        new_conflicts: list[dict] = []
+        for r in review_items:
+            d = r.get("details") or {}
+            if r["kind"] == "rule_notification":
+                stale_rules.append({
+                    "title": d.get("rule_title") or r.get("live_node_id"),
+                    "reason": d.get("reason"),
+                })
+            elif r["kind"] == "staleness":
+                stale_other.append({
+                    "entity_type": r.get("entity_type"),
+                    "name": d.get("name") or r.get("live_node_id"),
+                })
+            elif r["kind"] in ("conflict", "role_conflict"):
+                new_conflicts.append({
+                    "entity_type": r.get("entity_type"),
+                    "name": (d.get("live_fields") or {}).get("name") or r.get("live_node_id"),
+                })
+
+        # Fire Telegram digest (best-effort, never blocks scan result)
+        try:
+            from capabilities import notifier
+            notifier.send_scan_digest(
+                stale_rules=stale_rules,
+                stale_other=stale_other,
+                new_conflicts=new_conflicts,
+            )
+        except Exception as e:
+            log.warning("digest_send_failed", extra={"error": str(e)})
+
+        # Record scan
+        self.kg.graph.record_scan(
+            company_id=self.kg.company_id,
+            kind="auto",
+            queued_review=stale_data.get("queued_review", 0),
+            queued_notifications=stale_data.get("queued_notifications", 0),
+        )
+
+        return AgentResult(
+            True,
+            data={
+                "queued_review": stale_data.get("queued_review", 0),
+                "queued_notifications": stale_data.get("queued_notifications", 0),
+                "stale_rules": stale_rules,
+                "stale_other": stale_other,
+                "open_conflicts": new_conflicts,
             },
         )
 

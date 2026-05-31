@@ -9,6 +9,10 @@ import os
 from pathlib import Path
 
 import yaml
+from dotenv import load_dotenv
+
+# Load .env into os.environ before reading
+load_dotenv(Path(__file__).resolve().parent / ".env", override=False)
 
 # ---------------------------------------------------------------------------
 # Identity
@@ -78,6 +82,17 @@ CHUNK_OVERLAP_TOKENS = 200
 # ---------------------------------------------------------------------------
 PENDING_AUTO_PAUSE_THRESHOLD = 200    # ingestion_paused = True when exceeded
 PENDING_REJECTED_BLACKLIST_DAYS = 90
+
+# ---------------------------------------------------------------------------
+# Notifications — Telegram
+# ---------------------------------------------------------------------------
+TELEGRAM_BOT_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "").strip()
+TELEGRAM_ADMIN_CHAT_ID = os.getenv("TELEGRAM_ADMIN_CHAT_ID", "").strip()
+
+# ---------------------------------------------------------------------------
+# Auto-scan — DONNA full scan when last run > N hours ago
+# ---------------------------------------------------------------------------
+AUTO_SCAN_INTERVAL_HOURS = 24
 
 # ---------------------------------------------------------------------------
 # TUI palette

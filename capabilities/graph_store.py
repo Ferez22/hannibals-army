@@ -99,6 +99,16 @@ CREATE TABLE IF NOT EXISTS pending_blacklist (
     PRIMARY KEY (company_id, name_normalized, entity_type)
 );
 
+CREATE TABLE IF NOT EXISTS scan_log (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id TEXT NOT NULL,
+    kind TEXT NOT NULL,
+    ran_at TEXT NOT NULL,
+    queued_review INTEGER DEFAULT 0,
+    queued_notifications INTEGER DEFAULT 0
+);
+CREATE INDEX IF NOT EXISTS idx_scan_log_company_ran ON scan_log(company_id, ran_at);
+
 CREATE TABLE IF NOT EXISTS document_chunks (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
@@ -366,6 +376,42 @@ class GraphStore:
                 "DELETE FROM live_nodes WHERE id = ?", (node_id,)
             ).rowcount
         return {"edges_removed": removed_edges, "node_removed": removed_node}
+
+    # ---- Scan log ----
+    def last_scan_at(self, company_id: str, kind: str = "auto") -> datetime | None:
+        with self.conn() as c:
+            row = c.execute(
+                """SELECT ran_at FROM scan_log
+                   WHERE company_id = ? AND kind = ?
+                   ORDER BY ran_at DESC LIMIT 1""",
+                (company_id, kind),
+            ).fetchone()
+        if not row:
+            return None
+        try:
+            return datetime.fromisoformat(row["ran_at"])
+        except (ValueError, TypeError):
+            return None
+
+    def record_scan(
+        self,
+        *,
+        company_id: str,
+        kind: str,
+        queued_review: int,
+        queued_notifications: int,
+    ) -> int:
+        with self.conn() as c:
+            cur = c.execute(
+                """INSERT INTO scan_log
+                   (company_id, kind, ran_at, queued_review, queued_notifications)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (
+                    company_id, kind, datetime.now().isoformat(),
+                    queued_review, queued_notifications,
+                ),
+            )
+            return cur.lastrowid
 
     # ---- Document chunks ----
     def insert_chunk(
