@@ -4,6 +4,50 @@
 
 ---
 
+## Status (2026-05-31)
+
+| Phase | Goal | Status |
+|------:|------|:------:|
+| 0   | Scaffold — directories, agent stubs, entity Pydantic models, config | ✅ |
+| 0.5 | Extraction prototype spike on 6 real QartMina docs (JSON 100% valid) | ✅ |
+| 1   | Ingestion — PDF, DOCX, XLSX, PPTX, image (Gemma4 vision), URL parsers | ✅ |
+| 2   | KG core — SQLite schema, Chroma multilingual, extractor, dedup, promotion gates, CARTOGRAPHER + ORACLE, ingestion pipeline | ✅ |
+| 3   | TUI v1 — 5 screens (Home / Ingest / Query / Browser / Pending) on Textual | ✅ |
+| 4   | DONNA — conflict detection, staleness, Review screen, rule notifications | ✅ |
+| 4.5 | Employee profiles — photo attach (local + URL), Employees grid (textual-image) | ✅ |
+| 5   | Google Workspace ingestion | ⏸ (skipped — local files cover MVP) |
+| 5.5 | Polish — ORACLE summary mode, YAML write-back, manual Edges screen | ✅ |
+| 5.6 | People model refactor — employee/external split, sub_roles, emails[], Teams CRUD, Externals screen | ✅ |
+| 6   | Productization (multi-tenant + FastAPI + web UI) | ⏸ (deferred) |
+| 7   | Document RAG — chunker + chunk vector store, hybrid retrieval in ORACLE with `(filename, chunk N)` citations | ✅ |
+| 8   | DONNA Telegram digest + auto-scan on startup (24h gate) | ✅ |
+
+### What works today
+
+- Ingest 6 formats locally; auto-classify entities into staging; human promotes via Pending (Employee/External buttons)
+- Hybrid query: entities + document quotes with citations
+- Teams CRUD with member add/remove; external-on-team requires confirmation
+- Persons get photo, role + sub-roles, multi-email
+- Conflict surfaces in Review screen (add-as-sub-role / replace / dismiss)
+- Stale entities auto-detected (computed from `last_verified_at`); red badge in Browser
+- Telegram on rule staleness + nightly digest (rule + staleness + open conflicts)
+- TUI: 11 screens, color-themed (lightblue/white + orange/yellow + red/green)
+
+### Roadmap (next, in order)
+
+| Phase | Name | Why | Estimate |
+|------:|------|-----|---------:|
+| —    | **Validate** — drop real QartMina docs, observe pain | Evidence before more code | 30 min |
+| 9    | **Conversation memory** — multi-turn chat in Query screen, `conversations` + `messages` tables | Foundation for Telegram chat + learning | ~2h |
+| 10   | **Telegram inbound** — chat with army from phone, long-poll loop | High-value UX | ~2h |
+| 11   | **Learning** — persona memory (user teaches preferences) + ratings (👍/👎) + Q&A nodes in KG | The "specialized assistant" goal | ~3-4h |
+| 12   | **Tasks/Todos** — `Task` entity, TUI CRUD screen | Foundation for productivity features | ~2h |
+| 13+  | Integrations — Google Tasks, Notion, Slack | Pull from where work actually happens | ~3h each |
+
+See `docs/ROADMAP.md` for detail (when written).
+
+---
+
 ## Project Structure
 
 ```
