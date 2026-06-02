@@ -19,10 +19,11 @@ log = logging.getLogger("hannibal.oracle.intent")
 
 # Valid intents in priority order.
 VALID_INTENTS = (
-    "company",      # self-company questions (HQ, identity, leadership)
+    "company",       # self-company questions (HQ, identity, leadership)
     "person", "team", "project", "client",
     "rule", "event", "document",
-    "culture",      # values / working style — overlaps with company
+    "culture",       # values / working style — overlaps with company
+    "config_edit",   # CEO instructs an edit to company-config.yml (Telegram only)
     "summary", "unclear",
 )
 
@@ -62,6 +63,11 @@ def is_self_company_reference(question: str) -> bool:
 # ---------------------------------------------------------------------------
 # Patterns ordered by priority — first match wins.
 _LEXICAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
+    # CEO config edit — must come first so "remember our HQ is X" routes correctly
+    ("config_edit", re.compile(
+        r"^(remember|update|set|change|fix|note that|our (hq|address|legal name|industry) is)\b",
+        re.I,
+    )),
     # Client first — beats `who is` person pattern on "who is our client X"
     ("client", re.compile(
         r"^(list )?(our )?clients?\b|\bwho is our client\b|\bour customer\b", re.I,

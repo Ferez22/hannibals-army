@@ -92,10 +92,35 @@ def _maybe_auto_scan(kg) -> None:
 
 
 def main() -> int:
+    import argparse
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--with-bot", action="store_true",
+                        help="Also start the Telegram inbound polling loop (background thread)")
+    args = parser.parse_args()
+
     setup_logging()
     warmup()
-    from tui.app import HannibalsArmyApp
-    HannibalsArmyApp().run()
+
+    bot_stop = None
+    bot_thread = None
+    if args.with_bot:
+        from capabilities import telegram_bot, notifier
+        if not notifier.telegram_configured():
+            print("warning: --with-bot but TELEGRAM_BOT_TOKEN / TELEGRAM_ADMIN_CHAT_ID missing. "
+                  "Skipping bot.", flush=True)
+        else:
+            import threading
+            bot_stop = threading.Event()
+            bot_thread = telegram_bot.start(bot_stop)
+            print(f"telegram bot started (model: {config.MASTER_MODEL}). "
+                  f"Send /help to your bot.", flush=True)
+
+    try:
+        from tui.app import HannibalsArmyApp
+        HannibalsArmyApp().run()
+    finally:
+        if bot_stop is not None:
+            bot_stop.set()
     return 0
 
 

@@ -30,27 +30,74 @@ def telegram_configured() -> bool:
     return bool(config.TELEGRAM_BOT_TOKEN) and bool(config.TELEGRAM_ADMIN_CHAT_ID)
 
 
-def send_telegram(text: str, parse_mode: str = "HTML") -> bool:
-    """Send a message to the admin chat. Returns True on success, False otherwise."""
+def send_telegram(
+    text: str,
+    parse_mode: str = "HTML",
+    chat_id: str | None = None,
+    reply_markup: dict | None = None,
+) -> bool:
+    """Send a message. Defaults to admin chat unless chat_id supplied."""
     if not telegram_configured():
         log.warning("telegram_not_configured", extra={"reason": "missing token or chat_id"})
         return False
     import requests
     url = f"{TELEGRAM_API_BASE}/bot{config.TELEGRAM_BOT_TOKEN}/sendMessage"
-    payload = {
-        "chat_id": config.TELEGRAM_ADMIN_CHAT_ID,
+    payload: dict[str, Any] = {
+        "chat_id": chat_id or config.TELEGRAM_ADMIN_CHAT_ID,
         "text": text,
         "parse_mode": parse_mode,
         "disable_web_page_preview": True,
     }
+    if reply_markup:
+        payload["reply_markup"] = reply_markup
     try:
         resp = requests.post(url, json=payload, timeout=10)
         resp.raise_for_status()
-        log.info("telegram_sent", extra={"chars": len(text)})
+        log.info("telegram_sent", extra={"chars": len(text), "chat_id": payload["chat_id"]})
         return True
     except Exception as e:
         log.exception("telegram_failed", extra={"error": str(e)})
         return False
+
+
+def answer_callback(callback_id: str, text: str = "") -> bool:
+    """Acknowledge an inline keyboard tap so the button stops spinning."""
+    if not telegram_configured():
+        return False
+    import requests
+    url = f"{TELEGRAM_API_BASE}/bot{config.TELEGRAM_BOT_TOKEN}/answerCallbackQuery"
+    payload = {"callback_query_id": callback_id}
+    if text:
+        payload["text"] = text
+    try:
+        requests.post(url, json=payload, timeout=10).raise_for_status()
+        return True
+    except Exception as e:
+        log.warning("answer_callback_failed", extra={"error": str(e)})
+        return False
+
+
+def get_updates(offset: int = 0, timeout: int = 30) -> list[dict]:
+    """Long-poll Telegram for new updates. Returns list of update dicts."""
+    if not telegram_configured():
+        return []
+    import requests
+    url = f"{TELEGRAM_API_BASE}/bot{config.TELEGRAM_BOT_TOKEN}/getUpdates"
+    params = {
+        "offset": offset,
+        "timeout": timeout,
+        "allowed_updates": ["message", "callback_query"],
+    }
+    try:
+        resp = requests.get(url, params=params, timeout=timeout + 5)
+        resp.raise_for_status()
+        data = resp.json()
+        if not data.get("ok"):
+            return []
+        return data.get("result") or []
+    except Exception as e:
+        log.warning("get_updates_failed", extra={"error": str(e)})
+        return []
 
 
 # ---------------------------------------------------------------------------
