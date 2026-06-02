@@ -27,7 +27,7 @@ import threading
 from typing import Any
 
 import config
-from capabilities import config_patch, notifier
+from capabilities import config_patch, notifier, text_render
 from core.knowledge_graph import KnowledgeGraph
 
 log = logging.getLogger("hannibal.telegram_bot")
@@ -266,8 +266,10 @@ def _handle_freetext(text: str, chat_id: str, sender: dict) -> None:
     data = result.data if isinstance(result.data, dict) else {"answer": str(result.data)}
     answer = data.get("answer", "")
     diag_intent = (data.get("diag") or {}).get("intent", "?")
+    # Convert LLM markdown → Telegram HTML (handles **bold**, # headers, lists, code, links)
+    rendered = text_render.markdown_to_telegram_html(answer)
     notifier.send_telegram(
-        f"{_esc(answer)}\n\n<i>intent: {diag_intent}</i>",
+        f"{rendered}\n\n<i>intent: {diag_intent}</i>",
         chat_id=chat_id,
     )
 

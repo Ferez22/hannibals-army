@@ -11,6 +11,7 @@ from textual.containers import Horizontal, Vertical
 from textual.screen import Screen
 from textual.widgets import Button, Footer, Header, Input, RichLog, Static
 
+from rich.markdown import Markdown
 from rich.markup import escape as rich_escape
 
 from agents.oracle import ORACLE
@@ -104,8 +105,9 @@ class QueryScreen(Screen):
         for p in diag.get("top_chunk_previews", []):
             self.app.call_from_thread(log.write, f"[dim]  ▸ {p}[/]")
 
-        # Escape LLM-produced text so `[citation]` etc don't get parsed as Rich markup
-        self.app.call_from_thread(log.write, f"[#2ECC71]A:[/] {rich_escape(answer)}")
+        # Label line + rendered markdown body (headers, bold, lists, code blocks)
+        self.app.call_from_thread(log.write, "[#2ECC71]A:[/]")
+        self.app.call_from_thread(log.write, Markdown(answer))
         if result.cited_nodes:
             preview = ", ".join(result.cited_nodes[:5])
             self.app.call_from_thread(
