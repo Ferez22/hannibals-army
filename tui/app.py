@@ -6,12 +6,14 @@ from textual.app import App
 import config
 from tui.screens.attach import AttachScreen
 from tui.screens.browser import BrowserScreen
+from tui.screens.clients import ClientsScreen
 from tui.screens.edges import EdgesScreen
 from tui.screens.employees import EmployeesScreen
 from tui.screens.externals import ExternalsScreen
 from tui.screens.home import HomeScreen
 from tui.screens.ingest import IngestScreen
 from tui.screens.pending import PendingScreen
+from tui.screens.projects import ProjectsScreen
 from tui.screens.query import QueryScreen
 from tui.screens.review import ReviewScreen
 from tui.screens.teams import TeamsScreen
@@ -33,6 +35,8 @@ class HannibalsArmyApp(App):
         "attach":    AttachScreen,
         "employees": EmployeesScreen,
         "externals": ExternalsScreen,
+        "clients":   ClientsScreen,
+        "projects":  ProjectsScreen,
         "teams":     TeamsScreen,
         "edges":     EdgesScreen,
     }
@@ -46,6 +50,8 @@ class HannibalsArmyApp(App):
         ("v", "goto('review')",    "Review"),
         ("e", "goto('employees')", "Employees"),
         ("x", "goto('externals')", "Externals"),
+        ("c", "goto('clients')",   "Clients"),
+        ("j", "goto('projects')",  "Projects"),
         ("t", "goto('teams')",     "Teams"),
         ("a", "goto('attach')",    "Attach"),
         ("g", "goto('edges')",     "Edges"),

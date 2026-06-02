@@ -9,9 +9,9 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass
 
-# Approximate token count → ~4 chars per token, fits gemma4 context comfortably
-CHAT_CHUNK_CHARS = 1200
-CHAT_CHUNK_OVERLAP = 200
+# Smaller chunks = sharper retrieval (one topic per chunk, less doc-blending hallucination)
+CHAT_CHUNK_CHARS = 500
+CHAT_CHUNK_OVERLAP = 80
 
 
 @dataclass

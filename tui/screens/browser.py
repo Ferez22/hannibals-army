@@ -6,14 +6,14 @@ import json
 from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Static
 
 from agents.donna import is_stale
 from core.ingestion_pipeline import get_kg
 
-ENTITY_TYPES = ["Person", "Team", "Project", "Rule", "Event", "Document"]
+ENTITY_TYPES = ["Person", "Team", "Project", "Client", "Rule", "Event", "Document"]
 
 
 class BrowserScreen(Screen):
@@ -30,12 +30,13 @@ class BrowserScreen(Screen):
         yield Header()
         yield Static("", id="b-title", classes="section-title")
         yield Static("", id="b-banner")
-        with Horizontal():
-            with Vertical():
+        with Horizontal(classes="split-pane"):
+            with VerticalScroll(classes="split-pane-left"):
                 with Horizontal(id="b-actions"):
-                    yield Button("Delete node", variant="error", id="b-delete")
+                    yield Button("Delete", variant="error", id="b-delete")
                 yield DataTable(id="b-table", zebra_stripes=True)
-            yield Static("", id="b-detail")
+            with VerticalScroll(classes="split-pane-right"):
+                yield Static("[dim]select a row[/]", id="b-detail")
         yield Footer()
 
     def on_mount(self) -> None:

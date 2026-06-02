@@ -26,6 +26,7 @@ _TYPE_TO_THRESHOLD = {
     "Person":  "person_role",
     "Team":    "team_structure",
     "Project": "project_status",
+    "Client":  "client_relationship",
     "Rule":    "rule_policy",
     "Event":   "event",
 }
@@ -99,7 +100,20 @@ def detect_conflict(entity_type: str, candidate: dict, live: dict) -> dict | Non
         return None
 
     if entity_type == "Project":
-        # Status change = update, not conflict
+        diffs: dict = {}
+        # Status change = update, not conflict (preserved behaviour)
+        # kind change IS a conflict (internal → external is identity-level)
+        cv_kind = (cand_f.get("kind") or "").strip().lower()
+        lv_kind = (live_f.get("kind") or "").strip().lower()
+        if cv_kind and lv_kind and cv_kind != lv_kind:
+            diffs["kind"] = {"live": lv_kind, "candidate": cv_kind}
+        # client_id mismatch = conflict (one project shouldn't switch clients silently)
+        cv_client = (cand_f.get("client_id") or "").strip()
+        lv_client = (live_f.get("client_id") or "").strip()
+        if cv_client and lv_client and cv_client != lv_client:
+            diffs["client_id"] = {"live": lv_client, "candidate": cv_client}
+        if diffs:
+            return {"diffs": diffs}
         return None
 
     if entity_type == "Team":
@@ -107,6 +121,25 @@ def detect_conflict(entity_type: str, candidate: dict, live: dict) -> dict | Non
         for key in ("lead_id", "parent_team_id"):
             cv = (cand_f.get(key) or "").strip()
             lv = (live_f.get(key) or "").strip()
+            if cv and lv and cv != lv:
+                diffs[key] = {"live": lv, "candidate": cv}
+        cv_kind = (cand_f.get("kind") or "").strip().lower()
+        lv_kind = (live_f.get("kind") or "").strip().lower()
+        if cv_kind and lv_kind and cv_kind != lv_kind:
+            diffs["kind"] = {"live": lv_kind, "candidate": cv_kind}
+        cv_org = (cand_f.get("external_org") or "").strip().lower()
+        lv_org = (live_f.get("external_org") or "").strip().lower()
+        if cv_org and lv_org and cv_org != lv_org:
+            diffs["external_org"] = {"live": lv_org, "candidate": cv_org}
+        if diffs:
+            return {"diffs": diffs}
+        return None
+
+    if entity_type == "Client":
+        diffs = {}
+        for key in ("domicile", "industry"):
+            cv = (cand_f.get(key) or "").strip().lower()
+            lv = (live_f.get(key) or "").strip().lower()
             if cv and lv and cv != lv:
                 diffs[key] = {"live": lv, "candidate": cv}
         if diffs:
@@ -145,8 +178,11 @@ class Donna(BaseAgent):
         return AgentResult(False, error=f"unknown action: {action}")
 
     def _scan_count(self) -> AgentResult:
-        counts = {"stale_rules": 0, "stale_persons": 0, "stale_teams": 0, "stale_projects": 0}
-        for et in ("Rule", "Person", "Team", "Project"):
+        counts = {
+            "stale_rules": 0, "stale_persons": 0,
+            "stale_teams": 0, "stale_projects": 0, "stale_clients": 0,
+        }
+        for et in ("Rule", "Person", "Team", "Project", "Client"):
             for node in self.kg.list_live(et):
                 if is_stale(node):
                     counts[f"stale_{et.lower()}s" if et != "Person" else "stale_persons"] += 1
@@ -161,7 +197,7 @@ class Donna(BaseAgent):
         # Build set of (kind, live_node_id) already queued (unresolved)
         already_queued = {(r["kind"], r["live_node_id"]) for r in existing_review}
 
-        for et in ("Rule", "Person", "Team", "Project"):
+        for et in ("Rule", "Person", "Team", "Project", "Client"):
             for node in self.kg.list_live(et):
                 if not is_stale(node):
                     continue

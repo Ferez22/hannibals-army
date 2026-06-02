@@ -21,29 +21,39 @@ RECENT_EVENTS_CAP = 10
 
 
 def sync_company_config(kg: KnowledgeGraph, written_by: str = "CARTOGRAPHER") -> None:
-    """Rebuild people/teams/projects/rules/recent_events blocks from live KG."""
+    """Rebuild people/teams/projects/rules/recent_events blocks from live KG.
+
+    Preserves _meta.edit_history (does NOT nuke it) and appends a sync entry.
+    Preserves identity/leadership/tools/culture sections (human-curated).
+    """
     existing = yaml_io.read_yaml(CONFIG_PATH)
     if not isinstance(existing, dict):
         existing = {}
 
-    existing["_meta"] = {
-        "last_updated_by": written_by,
-        "last_updated_at": datetime.now().isoformat(),
-        "confidence_score": 1.0,
-        "schema_version": existing.get("_meta", {}).get("schema_version", "1.0"),
-    }
+    # Preserve schema_version if set
+    meta = existing.setdefault("_meta", {})
+    meta.setdefault("schema_version", "1.1")
+    meta.setdefault("confidence_score", 1.0)
 
-    # Keep identity/leadership/tools/culture sections as-is — those are human-curated
-    # We rewrite teams, people, projects, rules, recent_events
-
+    # Rewrite mirrored sections
+    sections_written = ["teams", "people", "projects", "clients", "rules", "recent_events"]
     existing["teams"] = _build_teams(kg)
     existing["people"] = _build_people(kg)
     existing["projects"] = _build_projects(kg)
+    existing["clients"] = _build_clients(kg)
     existing["rules"] = _build_rules(kg)
     existing["recent_events"] = _build_recent_events(kg)
 
+    # Append audit entry (also bumps last_updated_by / last_updated_at)
+    yaml_io.append_edit_history(
+        existing,
+        by=written_by,
+        action="sync",
+        sections=sections_written,
+    )
+
     yaml_io.write_yaml_atomic(CONFIG_PATH, existing)
-    log.info("company_config_synced", extra={"by": written_by})
+    log.info("company_config_synced", extra={"by": written_by, "sections": sections_written})
 
 
 # ---------------------------------------------------------------------------
@@ -53,12 +63,14 @@ def _build_teams(kg: KnowledgeGraph) -> list[dict]:
     for t in teams:
         f = t["fields"]
         out.append({
-            "name":    f.get("name"),
-            "lead":    f.get("lead_id"),
-            "mission": f.get("mission"),
-            "domain":  f.get("domain"),
-            "parent":  f.get("parent_team_id"),
-            "confidence": t["confidence"],
+            "name":         f.get("name"),
+            "kind":         f.get("kind", "internal"),
+            "external_org": f.get("external_org"),
+            "lead":         f.get("lead_id"),
+            "mission":      f.get("mission"),
+            "domain":       f.get("domain"),
+            "parent":       f.get("parent_team_id"),
+            "confidence":   t["confidence"],
         })
     return out
 
@@ -104,14 +116,51 @@ def _build_projects(kg: KnowledgeGraph) -> list[dict]:
     for p in projects:
         f = p["fields"]
         out.append({
-            "name":    f.get("name"),
-            "status":  f.get("status"),
-            "lead":    f.get("lead"),
-            "team":    f.get("team_id"),
-            "started": f.get("started"),
-            "target":  f.get("target"),
-            "description": f.get("description"),
+            "name":      f.get("name"),
+            "kind":      f.get("kind", "internal"),
+            "status":    f.get("status"),
+            "lead":      f.get("lead"),
+            "client_id": f.get("client_id"),
+            "team":      f.get("team_id"),
+            "started":   f.get("started"),
+            "target":    f.get("target"),
+            "description":     f.get("description"),
             "last_updated_at": p["last_verified_at"],
+        })
+    return out
+
+
+def _build_clients(kg: KnowledgeGraph) -> list[dict]:
+    clients = kg.list_live("Client")
+    out: list[dict] = []
+    for c in clients:
+        f = c["fields"]
+        # gather linked projects via Project.client_id OR OWNED_BY edge
+        linked_ids: set[str] = set()
+        for p in kg.list_live("Project"):
+            if p["fields"].get("client_id") == c["id"]:
+                linked_ids.add(p["id"])
+        for edge in kg.graph.edges_to(kg.company_id, c["id"]):
+            if edge["type"] == "OWNED_BY":
+                fn = kg.get_live(edge["from_id"])
+                if fn and fn["entity_type"] == "Project":
+                    linked_ids.add(fn["id"])
+        linked_projects: list[str] = []
+        for pid in linked_ids:
+            pn = kg.get_live(pid)
+            if pn:
+                linked_projects.append(pn["fields"].get("name", "—"))
+        out.append({
+            "id":            c["id"],
+            "name":          f.get("name"),
+            "industry":      f.get("industry"),
+            "contact_email": f.get("contact_email"),
+            "domicile":      f.get("domicile"),
+            "status":        f.get("status", "active"),
+            "notes":         f.get("notes"),
+            "projects":      linked_projects,
+            "confidence":    c["confidence"],
+            "last_verified_at": c["last_verified_at"],
         })
     return out
 

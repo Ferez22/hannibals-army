@@ -18,11 +18,10 @@ EXTRACTION_PROMPT = """You extract entities for a company knowledge graph. Retur
 ENTITY DEFINITIONS (strict — when in doubt, omit):
 
 - person: a named human being. Skip generic references ("the team", "the speaker", "the client").
-- team: a named subdivision INSIDE a company (e.g., "Engineering", "HR", "Backend"). Do NOT extract the company itself as a team. Do NOT extract job titles. A team must be an internal organizational unit.
-- project: a named initiative or product the company works on (e.g., "Additionality", "Product Alpha"). Do NOT extract todo items, tasks, or to-do list entries as projects. A project has a name that would appear on a roadmap, not on a checklist.
-- rule: an explicit policy, process, or value, typically marked by words like "policy", "must", "shall", "rule", "process". Skip incidental statements. If the doc isn't explicitly defining a rule, omit.
+- team: a named subdivision INSIDE a company (e.g., "Engineering", "HR", "Backend"). Do NOT extract the document-owning company itself as a team. Do NOT extract job titles.
+- rule: an explicit policy, process, or value, typically marked by words like "policy", "must", "shall", "rule", "process". Skip incidental statements.
 - event: a company-level dated occurrence (meeting, launch, signing, all-hands). Do NOT extract personal life events (births, passport issuance, ID card issuance). A date alone is not an event.
-- edge: relationship between two extracted entities. Valid types: MEMBER_OF, RUNS, PARTICIPATED_IN, AUTHORED, OWNED_BY, CHILD_OF.
+- edge: relationship between two extracted entities. Valid types: MEMBER_OF, RUNS, PARTICIPATED_IN, AUTHORED, CHILD_OF.
 
 OUTPUT RULES:
 - Only extract what is EXPLICITLY in the document text
@@ -33,8 +32,7 @@ OUTPUT RULES:
 OUTPUT SCHEMA:
 {
   "persons":  [{"name": "...", "email": null, "role": null}],
-  "teams":    [{"name": "...", "parent": null}],
-  "projects": [{"name": "...", "lead": null, "status": null}],
+  "teams":    [{"name": "..."}],
   "rules":    [{"title": "...", "category": "policy"}],
   "events":   [{"name": "...", "date": null}],
   "edges":    [{"from": "...", "type": "MEMBER_OF", "to": "...", "role": null}]
@@ -49,9 +47,33 @@ JSON:"""
 
 
 EMPTY_RESULT: dict[str, list] = {
-    "persons": [], "teams": [], "projects": [],
+    "persons": [], "teams": [],
     "rules": [], "events": [], "edges": [],
 }
+
+
+def summarize(text: str, max_chars: int = 4000) -> str:
+    """Return a 1-2 sentence plain-English summary of the document. Never raises."""
+    if not text or not text.strip():
+        return ""
+    if len(text) > max_chars:
+        text = text[:max_chars] + "\n[TRUNCATED]"
+    import ollama
+    prompt = (
+        "Summarize the document below in 1-2 plain English sentences. "
+        "Focus on WHAT it is and WHO/WHAT it concerns. No fluff. No 'this document'. Just the substance.\n\n"
+        f"---\n{text}\n---\n\nSummary:"
+    )
+    try:
+        resp = ollama.generate(
+            model=config.MASTER_MODEL,
+            prompt=prompt,
+            options={"temperature": 0.0, "num_predict": 120},
+        )
+        return (resp.get("response") or "").strip()
+    except Exception as e:
+        log.warning("summarize_failed", extra={"error": str(e)})
+        return ""
 
 
 def extract(text: str, max_chars: int = 8000) -> dict[str, list]:

@@ -40,7 +40,28 @@ def warmup() -> None:
     kg.vectors.search(query="warmup", company_id=config.COMPANY_ID, k=1)
     print("ready.", flush=True)
 
+    _maybe_auto_backup()
     _maybe_auto_scan(kg)
+
+
+def _maybe_auto_backup() -> None:
+    """Take a backup if last backup > 24h ago. Cheap, runs once a day."""
+    from datetime import datetime, timedelta
+    backups_dir = config.REPO_ROOT / "backups"
+    backups_dir.mkdir(parents=True, exist_ok=True)
+    backups = sorted(backups_dir.glob("army-*.tar.gz"), reverse=True)
+    if backups:
+        latest_age = datetime.now() - datetime.fromtimestamp(backups[0].stat().st_mtime)
+        if latest_age < timedelta(hours=24):
+            print(f"auto-backup skipped (last ran {latest_age.total_seconds()/3600:.1f}h ago).", flush=True)
+            return
+    print("auto-backup running...", flush=True)
+    try:
+        sys.path.insert(0, str(config.REPO_ROOT / "scripts"))
+        from backup import make_backup
+        make_backup(tag="auto")
+    except Exception as e:
+        print(f"auto-backup failed: {e}", flush=True)
 
 
 def _maybe_auto_scan(kg) -> None:

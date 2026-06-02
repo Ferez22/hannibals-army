@@ -10,7 +10,7 @@ import json
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Static
 
@@ -28,16 +28,17 @@ class PendingScreen(Screen):
             classes="section-title",
         )
         yield Static("", id="p-banner")
-        with Horizontal():
-            with Vertical():
+        with Horizontal(classes="split-pane"):
+            with VerticalScroll(classes="split-pane-left"):
                 with Horizontal(id="p-actions"):
-                    yield Button("Promote (Employee)", variant="success", id="p-promote-emp")
-                    yield Button("Promote (External)", variant="primary", id="p-promote-ext")
-                    yield Button("Promote (other)",    variant="default", id="p-promote-other")
-                    yield Button("Reject",             variant="error",   id="p-reject")
+                    yield Button("→ Employee", variant="success", id="p-promote-emp")
+                    yield Button("→ External", variant="primary", id="p-promote-ext")
+                    yield Button("→ Other",    variant="default", id="p-promote-other")
+                    yield Button("Reject",     variant="error",   id="p-reject")
                 yield DataTable(id="p-table", zebra_stripes=True)
                 yield Static("", id="p-extform")
-            yield Static("", id="p-detail")
+            with VerticalScroll(classes="split-pane-right"):
+                yield Static("[dim]select a row[/]", id="p-detail")
         yield Footer()
 
     def on_mount(self) -> None:
@@ -84,16 +85,63 @@ class PendingScreen(Screen):
         if not node:
             self.query_one("#p-detail", Static).update("[dim]no rows[/]")
             return
+        self.query_one("#p-detail", Static).update(self._friendly_detail(node))
+
+    def _friendly_detail(self, node: dict) -> str:
+        et = node["entity_type"]
+        f = node["fields"]
+        name = f.get("name") or f.get("title") or "(unnamed)"
         lines = [
-            f"[bold #5BC8F5]{node['id']}[/]",
-            f"[dim]type:[/] {node['entity_type']}",
-            f"[dim]reason:[/] {node['blocked_reason']}",
-            f"[dim]doc:[/] {node['extracted_from_doc_id']}",
+            f"[bold #5BC8F5]▌ {name}[/]",
+            f"[dim]{et}  ·  {node['id']}[/]",
+            f"[#F5D020]reason:[/] {node['blocked_reason'] or '—'}",
             "",
-            "[bold #F5A623]fields[/]",
-            json.dumps(node["fields"], indent=2, ensure_ascii=False),
         ]
-        self.query_one("#p-detail", Static).update("\n".join(lines))
+        if et == "Person":
+            kind = f.get("kind", "unknown")
+            lines.append(f"  [#F5A623]kind:[/] [bold]{kind}[/]")
+            emails = f.get("emails") or []
+            if emails:
+                lines.append(f"  [#F5A623]emails:[/] {', '.join(emails)}")
+            if f.get("role"):
+                lines.append(f"  [#F5A623]role:[/] {f['role']}")
+        elif et == "Team":
+            lines.append(f"  [#F5A623]kind:[/] [bold]{f.get('kind', 'internal')}[/]")
+            if f.get("external_org"):
+                lines.append(f"  [#F5A623]org:[/] {f['external_org']}")
+            if f.get("mission"):
+                lines.append(f"  [#F5A623]mission:[/] {f['mission']}")
+        elif et == "Project":
+            lines.append(f"  [#F5A623]kind:[/] [bold]{f.get('kind', 'internal')}[/]")
+            if f.get("status"):
+                lines.append(f"  [#F5A623]status:[/] {f['status']}")
+            if f.get("lead"):
+                lines.append(f"  [#F5A623]lead:[/] {f['lead']}")
+            if f.get("client_id"):
+                lines.append(f"  [#F5A623]client_id:[/] {f['client_id']}")
+        elif et == "Client":
+            if f.get("industry"):
+                lines.append(f"  [#F5A623]industry:[/] {f['industry']}")
+            if f.get("domicile"):
+                lines.append(f"  [#F5A623]domicile:[/] {f['domicile']}")
+            if f.get("contact_email"):
+                lines.append(f"  [#F5A623]contact:[/] {f['contact_email']}")
+        elif et == "Rule":
+            lines.append(f"  [#F5A623]category:[/] {f.get('category', '—')}")
+            if f.get("content"):
+                content = f["content"]
+                if len(content) > 200:
+                    content = content[:200] + "…"
+                lines.append(f"  [#F5A623]content:[/] {content}")
+        elif et == "Event":
+            if f.get("date"):
+                lines.append(f"  [#F5A623]date:[/] {f['date']}")
+            if f.get("outcome"):
+                lines.append(f"  [#F5A623]outcome:[/] {f['outcome']}")
+        lines.append("")
+        if node.get("extracted_from_doc_id"):
+            lines.append(f"[dim]from doc: {node['extracted_from_doc_id']}[/]")
+        return "\n".join(lines)
 
     # ---- Promote as Employee ----
     @on(Button.Pressed, "#p-promote-emp")

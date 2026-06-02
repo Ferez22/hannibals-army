@@ -130,8 +130,8 @@ RichLog {
 #p-actions, #r-actions, #b-actions {
     height: 3;
     align-horizontal: left;
-    width: 50%;
-    margin: 0;
+    width: 1fr;
+    margin: 0 0 1 0;
     padding: 0;
 }
 #p-actions Button, #r-actions Button, #b-actions Button {
@@ -142,9 +142,54 @@ RichLog {
     padding: 0 1;
 }
 
+/* Split screens: left + right columns equal width, scrollable */
+.split-pane {
+    width: 1fr;
+    height: 1fr;
+}
+.split-pane-left, .split-pane-right {
+    width: 1fr;
+    height: 1fr;
+    overflow-y: auto;
+    padding: 0 1;
+}
+.split-pane-left {
+    border-right: tall #4A5568;
+}
+
 /* Ingest input row layout */
 Horizontal {
     height: auto;
+}
+
+/* Ingest: result card area */
+#ingest-input-row {
+    height: 3;
+}
+#ingest-input-row Input {
+    width: 1fr;
+}
+#ingest-input-row Button {
+    width: 8;
+    margin-left: 1;
+}
+#ingest-results {
+    height: 1fr;
+    overflow-y: auto;
+}
+#ingest-card {
+    background: #161B22;
+    border: tall #4A5568;
+    padding: 1 2;
+    margin: 1 0;
+    height: auto;
+}
+#ingest-log {
+    height: auto;
+    min-height: 6;
+    max-height: 12;
+    border: tall #4A5568;
+    margin-top: 1;
 }
 
 /* Attach screen */
@@ -238,6 +283,67 @@ Horizontal {
     grid-gutter: 1 2;
     padding: 1 2;
     height: 1fr;
+}
+
+/* Projects get an orange border (focus / in-progress) */
+.project-card {
+    border: tall #F5A623;
+    padding: 1 1;
+    height: auto;
+    background: #161B22;
+}
+#pj-grid {
+    grid-size: 2;
+    grid-gutter: 1 2;
+    padding: 1 2;
+    height: auto;
+}
+#pj-scroll { height: 1fr; }
+#pj-form { padding: 1 2; height: auto; }
+.pj-row {
+    height: auto;
+    margin: 0 0 1 0;
+}
+.pj-row Input, .pj-row Select {
+    width: 1fr;
+    margin: 0 1 0 0;
+}
+.pj-row Button {
+    width: 20;
+    height: 3;
+}
+
+/* Clients get a yellow border (money-touching, attention-grabbing) */
+.client-card {
+    border: tall #F5D020;
+    padding: 1 1;
+    height: auto;
+    background: #161B22;
+}
+#cl-grid {
+    grid-size: 2;
+    grid-gutter: 1 2;
+    padding: 1 2;
+    height: auto;
+}
+#cl-scroll {
+    height: 1fr;
+}
+#cl-form {
+    padding: 1 2;
+    height: auto;
+}
+.cl-row {
+    height: auto;
+    margin: 0 0 1 0;
+}
+.cl-row Input, .cl-row Select {
+    width: 1fr;
+    margin: 0 1 0 0;
+}
+.cl-row Button {
+    width: 18;
+    height: 3;
 }
 
 /* Pending external promotion inline form */

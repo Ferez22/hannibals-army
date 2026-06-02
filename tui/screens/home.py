@@ -30,6 +30,8 @@ class HomeScreen(Screen):
                 "[#5BC8F5]v[/] review\n"
                 "  [#5BC8F5]e[/] employees    "
                 "[#5BC8F5]x[/] externals    "
+                "[#5BC8F5]c[/] clients    "
+                "[#5BC8F5]j[/] projects    "
                 "[#5BC8F5]t[/] teams    "
                 "[#5BC8F5]a[/] attach photo\n"
                 "  [#5BC8F5]g[/] edges    "
@@ -64,7 +66,7 @@ class HomeScreen(Screen):
         # KG snapshot
         kg = get_kg()
         counts: list[str] = []
-        for et in ["Person", "Team", "Project", "Rule", "Event", "Document"]:
+        for et in ["Person", "Team", "Project", "Client", "Rule", "Event", "Document"]:
             n = len(kg.list_live(et))
             counts.append(f"  {et:9s} [bold #5BC8F5]{n}[/]")
         pending = kg.pending_count()

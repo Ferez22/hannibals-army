@@ -97,6 +97,18 @@ def find_existing_project(extracted: dict[str, Any], live_projects: list[dict]) 
     return None
 
 
+def find_existing_client(extracted: dict[str, Any], live_clients: list[dict]) -> str | None:
+    name_tokens = normalize_tokens(extracted.get("name"))
+    ext_email = (extracted.get("contact_email") or "").lower().strip()
+    for c in live_clients:
+        if tokens_match(name_tokens, normalize_tokens(c["fields"].get("name"))):
+            return c["id"]
+        live_email = (c["fields"].get("contact_email") or "").lower().strip()
+        if ext_email and live_email and ext_email == live_email:
+            return c["id"]
+    return None
+
+
 def find_existing_rule(extracted: dict[str, Any], live_rules: list[dict]) -> str | None:
     ext_title = extracted.get("title", "")
     for r in live_rules:
@@ -119,11 +131,12 @@ def find_existing_event(extracted: dict[str, Any], live_events: list[dict]) -> s
 
 # Dispatcher
 FINDERS = {
-    "Person": find_existing_person,
-    "Team": find_existing_team,
+    "Person":  find_existing_person,
+    "Team":    find_existing_team,
     "Project": find_existing_project,
-    "Rule": find_existing_rule,
-    "Event": find_existing_event,
+    "Rule":    find_existing_rule,
+    "Event":   find_existing_event,
+    "Client":  find_existing_client,
 }
 
 

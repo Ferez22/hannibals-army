@@ -2,6 +2,13 @@
 
 > Repo guide for AI assistants. Read this first before making changes.
 
+## Skills (read first when relevant)
+
+- [Prompt engineer](docs/skills/prompt-engineer.md) — extractor / ORACLE / Telegram intent prompts
+- [TUI UX designer](docs/skills/ux-ui-designer.md) — layout, Select preservation, banner patterns
+- [Schema evolver](docs/skills/schema-evolver.md) — checklist for entity / edge / table changes
+- [Agentic tester](docs/skills/agentic-tester.md) — validation sequence per phase
+
 ## What this project is
 
 Company intelligence system. Ingest files (PDF/DOCX/XLSX/PPTX/images) and URLs → LLM extracts entities → hybrid knowledge graph (SQLite + Chroma vectors) → agents answer questions with citations. Local-first via Ollama + Gemma4:e2b. TUI built with Textual.
@@ -37,14 +44,17 @@ docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md
 1. **Staging + promotion gates** — bad extractions never reach live graph. ORACLE only queries live. Pending screen for manual triage.
 2. **No state machine** — single `SystemStatus.ingestion_paused` flag. Auto-paused at `PENDING_AUTO_PAUSE_THRESHOLD=200`.
 3. **Person.kind = employee | external | unknown** — `kind=unknown` blocks auto-promotion; user classifies in Pending with split buttons.
-4. **emails as list[str]**, **sub_roles as list[str]** — auto-merge new emails (no conflict). Role conflict → Review with `Add as sub-role` / `Replace` actions.
-5. **`MEMBER_OF` edge carries role + sub_roles + tasks + since** — not a separate node.
-6. **No NetworkX, no MCP, no Skill entity** — keep it minimal. SQLite + recursive CTEs are enough.
-7. **Vector embeddings** — `paraphrase-multilingual-MiniLM-L12-v2` (DE/FR/EN/AR). Two collections: `live_nodes` + `doc_chunks`.
-8. **company_id on every row from day 1** — even single-tenant. Avoids Phase 6 retrofit.
-9. **YAML write-back** — CARTOGRAPHER mirrors live KG into `company-config.yml` after every ingestion. Single-writer rule for that file.
-10. **Conflict detection rules per entity** — explicit, in `agents/donna.py:detect_conflict`. Status changes on Project are NOT conflicts.
-11. **Confidence formula** — `min(1.0, source_count / 3)`. Recomputed on every corroboration via `bump_corroboration`.
+4. **Project.kind = internal | external** — external requires `client_id`. Team.kind = internal | external — external requires `external_org`. Kind change is a conflict (identity-level).
+5. **Client entity always external** — paying customer orgs. Promotion gate is `awaiting_validation` (CEO confirms; money-touching).
+6. **emails as list[str]**, **sub_roles as list[str]** — auto-merge new emails (no conflict). Role conflict → Review with `Add as sub-role` / `Replace` actions.
+7. **`MEMBER_OF` edge carries role + sub_roles + tasks + since** — not a separate node.
+8. **Edge ↔ field sync rule** — `OWNED_BY` Project→Client edge also sets `Project.client_id` field + flips `Project.kind` to external. Downstream readers (Clients screen, yaml_sync) read both edge AND field for robustness. Pattern in `tui/screens/edges.py:create_edge`.
+9. **No NetworkX, no MCP, no Skill entity** — keep it minimal. SQLite + recursive CTEs are enough.
+10. **Vector embeddings** — `paraphrase-multilingual-MiniLM-L12-v2` (DE/FR/EN/AR). Two collections: `live_nodes` + `doc_chunks`.
+11. **company_id on every row from day 1** — even single-tenant. Avoids Phase 6 retrofit.
+12. **YAML write-back is canonical** — `company-config.yml` is the single source of truth. CARTOGRAPHER mirrors live KG into it after every ingestion. `_meta.edit_history` audits every write (CARTOGRAPHER syncs, DONNA scans, init_script bootstraps, CEO edits). Single-writer rule per section: `identity / leadership / tools / culture` are human-curated; `teams / people / projects / clients / rules / recent_events` are agent-mirrored.
+13. **Conflict detection rules per entity** — explicit, in `agents/donna.py:detect_conflict`. Status changes on Project are NOT conflicts. kind changes ARE.
+14. **Confidence formula** — `min(1.0, source_count / 3)`. Recomputed on every corroboration via `bump_corroboration`.
 
 ## Running
 
@@ -52,24 +62,26 @@ docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md
 .venv/bin/python main.py              # full TUI
 .venv/bin/python -m agents.ragnar <path-or-url>   # parser CLI test
 .venv/bin/python scripts/age_nodes.py --type Person --days 400 --all  # test staleness
+.venv/bin/python scripts/init_company.py                              # bootstrap company-config.yml
+.venv/bin/python scripts/extraction_spike.py                          # regression measure on sample docs
 ```
 
 First run downloads sentence-transformers model (~120MB). KG init is in `main.warmup()` before Textual starts (sentence-transformers fork-subprocess fights Textual event loop otherwise).
 
 ## TUI keys
 
-```
+```text
 i ingest    q query     b browser   p pending   v review
-e employees x externals t teams     a attach    g edges
+e employees x externals c clients   t teams     a attach    g edges
 r refresh   esc back    ctrl+c quit
 ```
 
 ## Config files
 
-- `.env` — `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID`, `COMPANY_ID` (optional, defaults `qartmina`)
+- `.env` — `TELEGRAM_BOT_TOKEN`, `TELEGRAM_ADMIN_CHAT_ID`, `COMPANY_ID` (optional, defaults `qartmina`), `OPENAI_API_KEY` (Phase 9.2+ for synthesis auto-switch)
 - `digital-twin-config.yml` — owner profile (gitignored)
-- `company-config.yml` — auto-synced from KG, also seeded manually (gitignored). Template: `company-config.sample.yml`
-- `config.py` — model names, paths, thresholds, palette, chunk sizes
+- `company-config.yml` — **canonical company-of-record**. Auto-mirrored from KG by CARTOGRAPHER. Seeded by `scripts/init_company.py`. Sections: human-curated (identity, leadership, tools, culture) vs agent-mirrored (teams, people, projects, clients, rules, recent_events). `_meta.edit_history` audits every write. Template: `company-config.sample.yml`
+- `config.py` — model names, paths, thresholds, palette, chunk sizes, vision budgets, auto-scan interval
 
 ## Schema migration policy
 

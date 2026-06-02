@@ -6,7 +6,7 @@ import json
 from rich.text import Text
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Static
 
@@ -27,15 +27,16 @@ class ReviewScreen(Screen):
             classes="section-title",
         )
         yield Static("", id="r-banner")  # scan results, action confirmations
-        with Horizontal():
-            with Vertical():
+        with Horizontal(classes="split-pane"):
+            with VerticalScroll(classes="split-pane-left"):
                 with Horizontal(id="r-actions"):
-                    yield Button("Verify",         variant="success", id="r-verify")
-                    yield Button("Add as sub-role", variant="primary", id="r-subrole")
-                    yield Button("Replace role",   variant="warning", id="r-replace")
-                    yield Button("Dismiss",        variant="default", id="r-dismiss")
+                    yield Button("Verify",   variant="success", id="r-verify")
+                    yield Button("→ Sub",    variant="primary", id="r-subrole")
+                    yield Button("Replace",  variant="warning", id="r-replace")
+                    yield Button("Dismiss",  variant="default", id="r-dismiss")
                 yield DataTable(id="r-table", zebra_stripes=True)
-            yield Static("", id="r-detail")
+            with VerticalScroll(classes="split-pane-right"):
+                yield Static("[dim]select a row[/]", id="r-detail")
         yield Footer()
 
     def on_mount(self) -> None:

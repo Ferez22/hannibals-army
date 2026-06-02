@@ -6,6 +6,7 @@ from typing import Any
 
 import config
 from agents.base_agent import AgentResult, BaseAgent
+from capabilities import retriever
 from core.knowledge_graph import KnowledgeGraph
 
 log = logging.getLogger("hannibal.oracle")
@@ -81,9 +82,9 @@ class Oracle(BaseAgent):
         if _is_summary_question(question):
             return self._summary_answer(question)
 
-        # Hybrid retrieval: entities + document chunks
+        # Hybrid retrieval: entities (dense) + document chunks (BM25 + dense, RRF)
         node_hits = self.kg.search(question, k=k)
-        chunk_hits = self.kg.search_chunks(question, k=k)
+        chunk_hits = retriever.hybrid_search_chunks(self.kg, question, k=k)
         log.info(
             "oracle_hits",
             extra={"nodes": len(node_hits), "chunks": len(chunk_hits)},
@@ -146,7 +147,14 @@ class Oracle(BaseAgent):
             "entities_found": len(node_hits),
             "chunks_found": len(chunk_hits),
             "entities_expanded": len(expanded),
-            "top_chunk_distances": [round(ch["distance"], 3) for ch in chunk_hits[:3]],
+            "top_chunk_scores": [
+                {
+                    "rrf": round(ch.get("score_rrf", 0.0), 4),
+                    "bm25": round(ch.get("score_bm25") or 0.0, 2),
+                    "dense_dist": round(ch.get("distance") or 0.0, 3),
+                }
+                for ch in chunk_hits[:3]
+            ],
             "top_chunk_previews": [
                 f"({ch.get('doc_title')}, ch {ch.get('ordinal')}): {ch.get('text', '')[:120]!r}"
                 for ch in chunk_hits[:3]

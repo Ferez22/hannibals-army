@@ -32,12 +32,15 @@ class Person(MemoryFields):
     expertise: list[str] = Field(default_factory=list)
     photo_path: str | None = None  # relative to REPO_ROOT
     external_company: str | None = None  # only set when kind == "external"
+    telegram_chat_id: str | None = None  # for Telegram bot auth (CEO edits, identified Q&A)
 
 
 class Team(MemoryFields):
     id: str
     company_id: str
     name: str
+    kind: Literal["internal", "external"] = "internal"
+    external_org: str | None = None  # required when kind == "external"
     mission: str | None = None
     lead_id: str | None = None
     domain: str | None = None
@@ -48,11 +51,25 @@ class Project(MemoryFields):
     id: str
     company_id: str
     name: str
+    kind: Literal["internal", "external"] = "internal"
     status: str | None = None  # "In Progress" | "On Hold" | "Done" | "Cancelled"
+    client_id: str | None = None  # required when kind == "external"
     team_id: str | None = None
     started: str | None = None
     target: str | None = None
     description: str | None = None
+
+
+class Client(MemoryFields):
+    id: str
+    company_id: str
+    name: str
+    industry: str | None = None
+    contact_person_id: str | None = None  # FK to a Person (likely external)
+    contact_email: str | None = None
+    domicile: str | None = None
+    status: Literal["active", "paused", "closed"] = "active"
+    notes: str | None = None
 
 
 class Rule(MemoryFields):
@@ -98,6 +115,8 @@ EdgeType = Literal[
     "EXTRACTED_FROM",
     "OWNED_BY",
     "NOTIFY",
+    "WORKS_ON",            # Team or Person → Project
+    "BELONGS_TO_CLIENT",   # Person → Client (external person tied to a client)
 ]
 
 

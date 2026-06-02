@@ -1,0 +1,120 @@
+_meta:
+  last_updated_by: CARTOGRAPHER
+  last_updated_at: '2026-05-31T19:12:27.836613'
+  confidence_score: 1.0
+  schema_version: '1.0'
+identity:
+  name: Acme Corp
+  legal_name: Acme Corporation GmbH
+  industry: Software / Consulting
+  founded: '2020'
+  size: 11-50
+  hq: Berlin, Germany
+  timezone: CET
+  website: https://acme.com
+  languages:
+  - German
+  - English
+  email_domain: acme.com
+leadership:
+  ceo:
+    name: Jane Doe
+    email: jane@acme.com
+    contact: 'Telegram: @janedoe'
+  cto:
+    name: John Smith
+    email: john@acme.com
+  hr_lead:
+    name: Maria Lopez
+    email: maria@acme.com
+    note: Primary contact for rule/policy validation notifications
+teams: []
+people:
+- name: KHRIBI ALI
+  kind: external
+  emails: []
+  role: null
+  sub_roles: []
+  external_company: almajd tcs
+  photo_path: null
+  tenure_since: null
+  expertise: []
+  memberships: []
+  confidence: 0.3333333333333333
+- name: Sonia HASHAS
+  kind: external
+  emails: []
+  role: null
+  sub_roles: []
+  external_company: forvis mazars tn
+  photo_path: null
+  tenure_since: null
+  expertise: []
+  memberships: []
+  confidence: 0.3333333333333333
+- name: Fares Mohamed AOUANI CHERIF
+  kind: employee
+  emails:
+  - fares@qartmina.com
+  role: null
+  sub_roles: []
+  external_company: null
+  photo_path: null
+  tenure_since: null
+  expertise: []
+  memberships: []
+  confidence: 0.6666666666666666
+projects: []
+rules: []
+tools:
+  productivity:
+  - Notion
+  - Slack
+  - Google Workspace
+  development:
+  - GitHub
+  - Docker
+  - Azure DevOps
+  communication:
+  - Slack
+  - Telegram
+  - Google Meet
+  design:
+  - Figma
+  finance:
+  - DATEV
+  - Stripe
+culture:
+  values:
+  - Ship fast, iterate often
+  - Radical transparency
+  - People over process
+  - Ownership mindset
+  working_style: Async-first, deep work culture
+  review_cycle: Quarterly
+  all_hands_frequency: Monthly
+recent_events:
+- name: signature
+  date: 21/05/2026
+  type: null
+  outcome: null
+- name: تاريخ إستخراج المضمون
+  date: 2026/03/17
+  type: null
+  outcome: null
+- name: تاريخ اإلشهار
+  date: 2026/03/13
+  type: null
+  outcome: null
+- name: 31/05/2026
+  date: '2026-05-31'
+  type: null
+  outcome: null
+- name: 7 avril 2026
+  date: '2026-04-07'
+  type: null
+  outcome: null
+- name: تاريخ بداية النشاط
+  date: 2025/12/30
+  type: null
+  outcome: null

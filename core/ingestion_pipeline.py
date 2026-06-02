@@ -11,7 +11,7 @@ import config
 from agents.base_agent import AgentResult
 from agents.cartographer import CARTOGRAPHER
 from agents.ragnar import RAGNAR
-from capabilities import chunker
+from capabilities import chunker, extractor
 from core.entity_types import RawDocument
 from core.knowledge_graph import KnowledgeGraph
 from core.system_status import SystemStatus
@@ -84,6 +84,15 @@ def ingest(source: str) -> AgentResult:
     )
     log.info("pipeline_document_promoted", extra={"doc_id": doc_live_id})
 
+    # 2a. 1-2 sentence plain-English summary (stored on Document.fields.summary)
+    summary = ""
+    try:
+        summary = extractor.summarize(raw_doc.raw_text)
+        if summary:
+            kg.update_live_field(doc_live_id, "summary", summary)
+    except Exception as e:
+        log.warning("summary_failed", extra={"doc_id": doc_live_id, "error": str(e)})
+
     # 2b. Chunk + embed the full text for document chat (RAG)
     try:
         chunks = chunker.chunk_text(raw_doc.raw_text)
@@ -105,11 +114,17 @@ def ingest(source: str) -> AgentResult:
     # 4. Refresh status (pending count may have grown)
     _refresh_status(kg)
 
+    cart_data = cart.data or {}
+    cart_data["summary"] = summary
+    cart_data["doc_title"] = raw_doc.metadata.get("filename", raw_doc.source)
+
     return AgentResult(
         True,
         data={
             "document_id": doc_live_id,
-            "extraction_summary": cart.data,
+            "doc_title": cart_data.get("doc_title"),
+            "summary": summary,
+            "extraction_summary": cart_data,
             "system_status": {
                 "pending": _STATUS.pending_count,
                 "paused": _STATUS.ingestion_paused,

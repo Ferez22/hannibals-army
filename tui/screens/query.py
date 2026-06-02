@@ -67,9 +67,13 @@ class QueryScreen(Screen):
                 log.write,
                 f"[#F5D020]retrieved:[/] entities={ents}  chunks={chunks}",
             )
+            scores = diag.get("top_chunk_scores", [])
             previews = diag.get("top_chunk_previews", [])
-            for p in previews:
-                self.app.call_from_thread(log.write, f"[dim]  ▸ {p}[/]")
+            for sc, p in zip(scores, previews):
+                self.app.call_from_thread(
+                    log.write,
+                    f"[dim]  ▸ [rrf={sc['rrf']} bm25={sc['bm25']} dist={sc['dense_dist']}] {p}[/]",
+                )
 
         self.app.call_from_thread(log.write, f"[#2ECC71]A:[/] {answer}")
         if result.cited_nodes:

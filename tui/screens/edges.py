@@ -12,12 +12,14 @@ from core.ingestion_pipeline import get_kg
 
 
 EDGE_TYPES: list[str] = [
-    "MEMBER_OF",        # Person → Team
-    "RUNS",             # Team → Project
-    "PARTICIPATED_IN",  # Person → Event
-    "AUTHORED",         # Person → Document
-    "CHILD_OF",         # Team → Team
-    "OWNED_BY",         # Rule → Person/Team
+    "MEMBER_OF",          # Person → Team
+    "RUNS",               # Team → Project
+    "WORKS_ON",           # Team or Person → Project
+    "PARTICIPATED_IN",    # Person → Event
+    "AUTHORED",           # Person → Document
+    "CHILD_OF",           # Team → Team
+    "OWNED_BY",           # Rule → Person/Team  OR  Project → Client
+    "BELONGS_TO_CLIENT",  # Person (external) → Client
 ]
 
 
@@ -74,7 +76,7 @@ class EdgesScreen(Screen):
     def populate_selects(self) -> None:
         kg = get_kg()
         options: list[tuple[str, str]] = []
-        for et in ("Person", "Team", "Project", "Rule", "Event", "Document"):
+        for et in ("Person", "Team", "Project", "Client", "Rule", "Event", "Document"):
             for n in kg.list_live(et):
                 label = n["fields"].get("name") or n["fields"].get("title") or "(unnamed)"
                 options.append((f"[{et}] {label}  ({n['id'][:18]})", n["id"]))
@@ -153,6 +155,22 @@ class EdgesScreen(Screen):
             )
         except Exception as e:
             banner.update(f"[red]{type(e).__name__}: {e}[/]"); return
+
+        # Field-sync side effects so downstream views (Clients, yaml_sync) see the link
+        try:
+            if edge_type == "OWNED_BY":
+                from_node = kg.get_live(from_id)
+                to_node = kg.get_live(to_id)
+                # Project --OWNED_BY--> Client : also set Project.client_id
+                if (from_node and from_node["entity_type"] == "Project"
+                        and to_node and to_node["entity_type"] == "Client"):
+                    kg.update_live_field(from_id, "client_id", to_id)
+                    # If project still marked internal, flip to external
+                    if from_node["fields"].get("kind") != "external":
+                        kg.update_live_field(from_id, "kind", "external")
+        except Exception as e:
+            banner.update(f"[#F5A623]edge ok, field-sync warn:[/] {e}");
+            # still continue with success flow below
 
         banner.update(f"[#2ECC71]created edge #{edge_id}[/]  {edge_type}")
         self.query_one("#ed-role", Input).clear()

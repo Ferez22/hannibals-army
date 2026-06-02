@@ -10,6 +10,7 @@ trip_plans/*
 db/*
 memory/
 logs/
+backups/
 
 db/graph.db
 army.log

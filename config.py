@@ -54,11 +54,12 @@ COMPANY = _load_yaml("company-config.yml")
 # Staleness thresholds (days) — DONNA uses these to flag stale entities
 # ---------------------------------------------------------------------------
 STALENESS_THRESHOLDS = {
-    "person_role":    365,   # 12 months
-    "team_structure": 180,   # 6 months
-    "project_status":  90,   # 3 months
-    "rule_policy":    180,   # 6 months
-    "event":         None,   # never
+    "person_role":         365,   # 12 months
+    "team_structure":      180,   # 6 months
+    "project_status":       90,   # 3 months
+    "client_relationship": 180,   # 6 months — touch base regularly
+    "rule_policy":         180,   # 6 months
+    "event":              None,   # never
 }
 
 # ---------------------------------------------------------------------------

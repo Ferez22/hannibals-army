@@ -14,11 +14,13 @@ from core.knowledge_graph import KnowledgeGraph
 log = logging.getLogger("hannibal.cartographer")
 
 
-# Map extractor output keys → entity type names
+# Map extractor output keys → entity type names.
+# NOTE: Client AND Project are intentionally NOT here. High-stakes / money-touching;
+# the user creates them manually via Clients / Projects screens. Extractor focuses
+# on what small models do well: name extraction (Person/Team/Rule/Event).
 _TYPE_MAP = {
     "persons":  "Person",
     "teams":    "Team",
-    "projects": "Project",
     "rules":    "Rule",
     "events":   "Event",
 }
@@ -41,13 +43,33 @@ def _entity_description(entity_type: str, fields: dict[str, Any]) -> str:
             parts.append("also " + ", ".join(fields["sub_roles"]))
         return ", ".join(p for p in parts if p)
     if entity_type == "Team":
-        return f"Team: {fields.get('name', '')}"
+        parts = [f"Team {fields.get('name', '')}"]
+        kind = fields.get("kind", "internal")
+        parts.append(kind)
+        if fields.get("external_org"):
+            parts.append(f"at {fields['external_org']}")
+        if fields.get("domain"):
+            parts.append(f"domain {fields['domain']}")
+        return ", ".join(p for p in parts if p)
     if entity_type == "Project":
         parts = [f"Project {fields.get('name', '')}"]
+        kind = fields.get("kind", "internal")
+        parts.append(kind)
         if fields.get("status"):
             parts.append(f"status {fields['status']}")
         if fields.get("lead"):
             parts.append(f"lead {fields['lead']}")
+        if fields.get("client_id"):
+            parts.append(f"client_id {fields['client_id']}")
+        return ", ".join(p for p in parts if p)
+    if entity_type == "Client":
+        parts = [f"Client {fields.get('name', '')}"]
+        if fields.get("industry"):
+            parts.append(f"industry {fields['industry']}")
+        if fields.get("domicile"):
+            parts.append(f"domicile {fields['domicile']}")
+        if fields.get("status"):
+            parts.append(f"status {fields['status']}")
         return ", ".join(p for p in parts if p)
     if entity_type == "Rule":
         return f"Rule {fields.get('title', '')}: {fields.get('content', '')}"
@@ -274,15 +296,32 @@ def _to_storage_fields(entity_type: str, item: dict[str, Any]) -> dict[str, Any]
             "photo_path": None,
         }
     if entity_type == "Team":
+        kind_raw = (item.get("kind") or "internal").strip().lower()
+        kind = kind_raw if kind_raw in ("internal", "external") else "internal"
         return {
             "name": item.get("name", "").strip(),
+            "kind": kind,
+            "external_org": (item.get("external_org") or "").strip() or None,
             "parent_team_id": (item.get("parent") or "").strip() or None,
         }
     if entity_type == "Project":
+        kind_raw = (item.get("kind") or "internal").strip().lower()
+        kind = kind_raw if kind_raw in ("internal", "external") else "internal"
         return {
             "name": item.get("name", "").strip(),
+            "kind": kind,
             "lead": (item.get("lead") or "").strip() or None,
             "status": (item.get("status") or "").strip() or None,
+            "client_id": (item.get("client_id") or "").strip() or None,
+        }
+    if entity_type == "Client":
+        return {
+            "name": item.get("name", "").strip(),
+            "industry": (item.get("industry") or "").strip() or None,
+            "contact_email": (item.get("contact_email") or "").strip() or None,
+            "domicile": (item.get("domicile") or "").strip() or None,
+            "status": (item.get("status") or "active").strip() or "active",
+            "notes": (item.get("notes") or "").strip() or None,
         }
     if entity_type == "Rule":
         return {

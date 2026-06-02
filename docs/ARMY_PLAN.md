@@ -35,16 +35,21 @@
 
 ### Roadmap (next, in order)
 
+Validation (2026-05-31) revealed: ORACLE is too RAG-biased (ignores graph), hallucinates on multi-doc chunks, doesn't route by intent, no Client entity, company-config still has sample data. Phase 9 addresses all of it.
+
+See `docs/PHASE_9_CLIENTS_ORACLE.md` for full design.
+
 | Phase | Name | Why | Estimate |
 |------:|------|-----|---------:|
-| —    | **Validate** — drop real QartMina docs, observe pain | Evidence before more code | 30 min |
-| 9    | **Conversation memory** — multi-turn chat in Query screen, `conversations` + `messages` tables | Foundation for Telegram chat + learning | ~2h |
-| 10   | **Telegram inbound** — chat with army from phone, long-poll loop | High-value UX | ~2h |
-| 11   | **Learning** — persona memory (user teaches preferences) + ratings (👍/👎) + Q&A nodes in KG | The "specialized assistant" goal | ~3-4h |
+| 9.0  | **company-config init CLI** — replace John Doe with real QartMina data + add `_meta.edit_history` audit | Single source of truth must be real | 30 min |
+| 9.1  | **Clients + Project/Team kind** — new `Client` entity, `Project.kind=internal\|external`, `Team.kind`, edges OWNED_BY/WORKS_ON/BELONGS_TO_CLIENT, Clients screen | Real client work is the use case | ~3h |
+| 9.2  | **ORACLE rebuild** — intent classifier → per-intent retrievers → synthesizer with auto-switch to GPT-5.4-mini for `rule`/`project` intents. Clarification buttons. Smaller chunks (500 chars) | RAG-only ≠ smart assistant | ~4h |
+| 9.3  | **Telegram inbound + CEO edits** — long-poll loop, Person.telegram_chat_id auth, `config_edit` intent with patch-and-confirm flow | Chat from phone, CEO can teach the bot | ~3h |
+| 9.4  | **UX polish** — Browser/Pending/Review widths, Teams screen redesign | Validation findings | ~30 min |
+| 10   | **Conversation memory** — multi-turn chat, `conversations` + `messages` tables, last N turns injected | Foundation for learning loop | ~2h |
+| 11   | **Learning loop** — persona memory + ratings (👍/👎) + Q&A history as KG nodes | The "specialized assistant" goal | ~3-4h |
 | 12   | **Tasks/Todos** — `Task` entity, TUI CRUD screen | Foundation for productivity features | ~2h |
 | 13+  | Integrations — Google Tasks, Notion, Slack | Pull from where work actually happens | ~3h each |
-
-See `docs/ROADMAP.md` for detail (when written).
 
 ---
 

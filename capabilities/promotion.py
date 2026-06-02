@@ -39,6 +39,11 @@ def should_auto_promote(
         return False, "needs_categorization"
 
     if entity_type == "Team":
+        kind = fields.get("kind", "internal")
+        if kind == "external":
+            if not fields.get("external_org"):
+                return False, "needs_external_org"
+            return True, None  # external teams need explicit org but promote on first sight
         name = (fields.get("name") or "").lower().strip()
         if name and name in company_seeded_names:
             return True, None
@@ -47,9 +52,22 @@ def should_auto_promote(
         return False, "awaiting_corroboration"
 
     if entity_type == "Project":
+        kind = fields.get("kind", "internal")
+        if kind == "external":
+            if not fields.get("client_id"):
+                return False, "needs_client"
+            if has_resolvable_lead and corroboration_count >= 2:
+                return True, None
+            return False, "awaiting_corroboration"
+        # internal project
         if has_resolvable_lead and corroboration_count >= 2:
             return True, None
         return False, "awaiting_corroboration"
+
+    if entity_type == "Client":
+        if not fields.get("name"):
+            return False, "missing_name"
+        return False, "awaiting_validation"  # CEO must confirm clients (touches money)
 
     if entity_type == "Rule":
         # Strict gate — only promote if content has explicit category marker

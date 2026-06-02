@@ -33,6 +33,18 @@ class TeamsScreen(Screen):
                     yield Input(placeholder="team name", id="t-new-name")
                     yield Input(placeholder="mission (optional)", id="t-new-mission")
                 with Horizontal(classes="t-row"):
+                    yield Select(
+                        options=[("internal", "internal"), ("external", "external")],
+                        id="t-new-kind",
+                        prompt="kind",
+                        value="internal",
+                        allow_blank=False,
+                    )
+                    yield Input(
+                        placeholder="external org (only if external)",
+                        id="t-new-extorg",
+                    )
+                with Horizontal(classes="t-row"):
                     yield Select(options=[], id="t-new-parent", prompt="parent (optional)")
                     yield Button("Create", variant="primary", id="t-create")
             with Vertical():
@@ -206,6 +218,9 @@ class TeamsScreen(Screen):
     def create_team(self) -> None:
         name = self.query_one("#t-new-name", Input).value.strip()
         mission = self.query_one("#t-new-mission", Input).value.strip()
+        kind_sel = self.query_one("#t-new-kind", Select).value
+        kind = kind_sel if kind_sel in ("internal", "external") else "internal"
+        external_org = self.query_one("#t-new-extorg", Input).value.strip()
         parent_sel = self.query_one("#t-new-parent", Select).value
         parent_id = (
             parent_sel
@@ -216,6 +231,8 @@ class TeamsScreen(Screen):
         banner = self.query_one("#t-banner", Static)
         if not name:
             banner.update("[red]team name required[/]"); return
+        if kind == "external" and not external_org:
+            banner.update("[red]external team requires external_org[/]"); return
 
         kg = get_kg()
         # Stage + auto-promote (team creation is human-initiated)
@@ -223,6 +240,8 @@ class TeamsScreen(Screen):
             entity_type="Team",
             fields={
                 "name": name,
+                "kind": kind,
+                "external_org": external_org or None,
                 "mission": mission or None,
                 "parent_team_id": parent_id,
                 "lead_id": None,
@@ -231,13 +250,14 @@ class TeamsScreen(Screen):
             doc_id=None,
             promotion_status="auto_eligible",
         )
-        live_id = kg.promote(staging_id, f"Team: {name}")
+        live_id = kg.promote(staging_id, f"Team {kind}: {name}")
         if parent_id:
             kg.add_live_edge(from_id=live_id, type="CHILD_OF", to_id=parent_id)
         # Clear inputs
         self.query_one("#t-new-name", Input).clear()
         self.query_one("#t-new-mission", Input).clear()
-        banner.update(f"[#2ECC71]created team[/] {name} → {live_id}")
+        self.query_one("#t-new-extorg", Input).clear()
+        banner.update(f"[#2ECC71]created {kind} team[/] {name} → {live_id}")
         self._render_teams_table()
         self._update_parent_dropdown()
         self._update_for_selected_team(force=True)
