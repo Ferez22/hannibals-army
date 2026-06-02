@@ -327,6 +327,14 @@ class TeamsScreen(Screen):
             banner.update(f"[red]add failed: {type(e).__name__}: {e}[/]")
             return
 
+        # Field-sync: if role indicates lead, also set Team.lead_id so downstream
+        # (ORACLE, yaml_sync) sees the lead without needing edge traversal.
+        if role and any(k in role.lower() for k in ("lead", "head", "manager")):
+            try:
+                kg.update_live_field(team["id"], "lead_id", person_sel)
+            except Exception:
+                pass
+
         self.query_one("#t-add-role", Input).clear()
         self.query_one("#t-add-subroles", Input).clear()
         banner.update(

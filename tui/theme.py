@@ -162,6 +162,25 @@ Horizontal {
     height: auto;
 }
 
+/* Query screen */
+#q-input-row {
+    height: 3;
+}
+#q-input-row Input { width: 1fr; }
+#q-input-row Button { width: 8; margin-left: 1; }
+#q-suggestions {
+    height: auto;
+    margin: 1 0;
+}
+#q-suggestions Button {
+    margin: 0 1 0 0;
+    height: 3;
+}
+#q-log {
+    height: 1fr;
+    border: tall #4A5568;
+}
+
 /* Ingest: result card area */
 #ingest-input-row {
     height: 3;

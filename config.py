@@ -21,6 +21,26 @@ APP_NAME = "Hannibal's Army"
 MASTER_MODEL = "gemma4:e2b"
 EMBEDDING_MODEL = "paraphrase-multilingual-MiniLM-L12-v2"
 
+# OpenAI fallback (used for synthesis on high-precision intents)
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "").strip()
+# Default to gpt-4o-mini — cheap, broadly available. Override via OPENAI_MODEL env.
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "gpt-4o-mini").strip()
+
+# Per-intent synthesis model override. Falls back to MASTER_MODEL if intent not listed
+# OR if OPENAI_API_KEY is empty.
+SYNTHESIS_MODEL_MAP = {
+    "rule":    "openai",
+    "project": "openai",
+    "company": "openai",
+    "culture": "openai",
+    "person":  "openai",   # weaving multi-edge person context — Gemma drops detail
+    "team":    "openai",   # members + lead + projects narrative
+    "client":  "openai",   # client + linked projects + contacts
+    "event":   "openai",
+    "document": "openai",  # quote synthesis benefits from cloud
+    "summary": "openai",   # inventory-to-prose
+}
+
 # ---------------------------------------------------------------------------
 # Tenancy
 # ---------------------------------------------------------------------------

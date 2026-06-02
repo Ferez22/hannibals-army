@@ -20,10 +20,20 @@ from tui.screens.teams import TeamsScreen
 from tui.theme import CSS
 
 
+def _sub_title() -> str:
+    parts = [f"company: {config.COMPANY_ID}", f"model: {config.MASTER_MODEL}"]
+    if config.OPENAI_API_KEY:
+        intents = ",".join(
+            i for i, m in config.SYNTHESIS_MODEL_MAP.items() if m == "openai"
+        )
+        parts.append(f"cloud: {config.OPENAI_MODEL} ({intents})")
+    return "   ".join(parts)
+
+
 class HannibalsArmyApp(App):
     CSS = CSS
     TITLE = config.APP_NAME
-    SUB_TITLE = f"company: {config.COMPANY_ID}   model: {config.MASTER_MODEL}"
+    SUB_TITLE = _sub_title()
 
     SCREENS = {
         "home":      HomeScreen,

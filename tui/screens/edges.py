@@ -168,6 +168,13 @@ class EdgesScreen(Screen):
                     # If project still marked internal, flip to external
                     if from_node["fields"].get("kind") != "external":
                         kg.update_live_field(from_id, "kind", "external")
+            elif edge_type == "MEMBER_OF" and role and any(
+                k in role.lower() for k in ("lead", "head", "manager")
+            ):
+                # Person --MEMBER_OF--> Team with role=lead : set Team.lead_id
+                to_node = kg.get_live(to_id)
+                if to_node and to_node["entity_type"] == "Team":
+                    kg.update_live_field(to_id, "lead_id", from_id)
         except Exception as e:
             banner.update(f"[#F5A623]edge ok, field-sync warn:[/] {e}");
             # still continue with success flow below
