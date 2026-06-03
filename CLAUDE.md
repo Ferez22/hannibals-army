@@ -18,15 +18,15 @@ QartMina is the dog-food customer (single tenant). Multi-tenant productization d
 ## Architecture
 
 ```
-agents/         # 5 agents — Hannibal, Ragnar, Cartographer, Oracle, Donna
-capabilities/   # Reusable functions agents call — parsers, stores, extractor, dedup, promotion, notifier, yaml_io/sync, chunker, photo_store
+agents/         # Hannibal, Ragnar, Cartographer, Donna + ORACLE split: oracle (entry) → oracle_intent (LLM+lexical router) → oracle_retrieve (per-intent retrievers) → oracle_synth (local Ollama or OpenAI cloud)
+capabilities/   # parsers, graph_store, vector_store, extractor, dedup, promotion, notifier, yaml_io/sync, chunker, photo_store, retriever, llm, text_render (markdown), telegram_bot (polling+dispatch), config_patch (CEO edit flow)
 core/           # Domain — entity_types (Pydantic), knowledge_graph (facade), ingestion_pipeline, system_status
 tui/            # Textual TUI — app + 9 screens
 db/             # SQLite (graph.db) — gitignored
 memory/chroma/  # Vector store — gitignored
 data/samples/   # Test corpus — gitignored
 data/photos/    # Person photos — gitignored
-docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md
+docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md, graph-datastructure.dbml
 ```
 
 ## Agents
@@ -36,7 +36,7 @@ docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md
 | HANNIBAL | Orchestrator (currently thin — placeholder for LangGraph routing) |
 | RAGNAR | Ingestion — parses any supported format into RawDocument |
 | CARTOGRAPHER | LLM extraction → staging → dedup → promotion → writes live KG + YAML mirror |
-| ORACLE | Hybrid retrieval (entities + chunks) → cited answer. Summary mode for broad questions |
+| ORACLE | Intent router → per-intent retriever → synthesizer. Intents: `person`, `project`, `team`, `client`, `summary`, `config_edit`, `generic`. Lexical patterns in `oracle_intent.py:LEXICAL_PATTERNS` fast-path; LLM classifier fallback. Synthesis auto-switches to OpenAI when `OPENAI_API_KEY` set, else local Ollama. |
 | DONNA | Validator — staleness scan, conflict detection, rule notifications (TUI + Telegram), auto-scan on startup if last > 24h |
 
 ## Key design decisions (DO NOT change without discussion)
@@ -55,11 +55,15 @@ docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md
 12. **YAML write-back is canonical** — `company-config.yml` is the single source of truth. CARTOGRAPHER mirrors live KG into it after every ingestion. `_meta.edit_history` audits every write (CARTOGRAPHER syncs, DONNA scans, init_script bootstraps, CEO edits). Single-writer rule per section: `identity / leadership / tools / culture` are human-curated; `teams / people / projects / clients / rules / recent_events` are agent-mirrored.
 13. **Conflict detection rules per entity** — explicit, in `agents/donna.py:detect_conflict`. Status changes on Project are NOT conflicts. kind changes ARE.
 14. **Confidence formula** — `min(1.0, source_count / 3)`. Recomputed on every corroboration via `bump_corroboration`.
+15. **ORACLE intent router is two-stage** — fast lexical regex in `oracle_intent.py:LEXICAL_PATTERNS` first; only falls through to LLM classifier on no match. When adding new question shapes, prefer extending lexical patterns over re-prompting the classifier.
+16. **CEO config edits via Telegram are gated** — `config_edit` intent produces a YAML patch proposal with inline buttons (confirm/cancel). `capabilities/config_patch.py` applies the patch with `_meta.edit_history` audit. Never write to `company-config.yml` from Telegram without CEO callback confirmation.
+17. **Telegram identity** — `Person.telegram_chat_id` resolves the sender. `/register` command binds chat → person. Unknown chats only get a generic refusal; never expose KG content without resolution.
 
 ## Running
 
 ```bash
-.venv/bin/python main.py              # full TUI
+.venv/bin/python main.py                          # full TUI
+.venv/bin/python main.py --with-bot               # TUI + Telegram bot polling loop (background thread)
 .venv/bin/python -m agents.ragnar <path-or-url>   # parser CLI test
 .venv/bin/python scripts/age_nodes.py --type Person --days 400 --all  # test staleness
 .venv/bin/python scripts/init_company.py                              # bootstrap company-config.yml
@@ -118,3 +122,6 @@ See `docs/ARMY_PLAN.md` (status) and `docs/ROADMAP.md` (next).
 3. Sentence-transformers subprocess fork breaks Textual on Python 3.13 — keep `OMP_NUM_THREADS=1`, `TOKENIZERS_PARALLELISM=false` in main.py.
 4. Telegram notifier swallows network errors (best-effort). Don't make scan blocking on it.
 5. ORACLE summary mode triggers on keyword match. Sometimes misclassifies. Acceptable for MVP.
+6. ORACLE synthesis silently routes to OpenAI when `OPENAI_API_KEY` is set — sensitive KG content leaves the box. Strip the key in `.env` to force local-only.
+7. Telegram bot runs in a background thread when `--with-bot`. It shares the KG handle; long-running CEO patches must not block the polling loop (use the dispatch pattern in `capabilities/telegram_bot.py`).
+8. Markdown rendering split: Telegram uses HTML subset (`capabilities/text_render.py:to_telegram_html`); TUI uses Rich Markdown. Same source string; do not embed Telegram-specific tags in answers.

@@ -90,21 +90,25 @@ _LEXICAL_PATTERNS: list[tuple[str, re.Pattern[str]]] = [
     ("culture", re.compile(
         r"\b(values?|culture|working style|mission statement|vision|how (do|does) the company)\b", re.I,
     )),
-    # Team — anything about who leads / runs a named team, members, scope.
+    # Team — anything about who leads / runs a named team, members, scope, listings.
     # Pattern BEFORE person because "who leads engineering" should be team, not person.
     ("team", re.compile(
         r"\b(who leads|who runs|who heads|head of) (the |our )?(engineering|hr|finance|marketing|sales|operations|ops|product|design|backend|frontend|legal|infra|devops|it|data|research|support|customer success|cs)\b"
         r"|\b(members of|team of|who is in) (the |our )?(engineering|hr|finance|marketing|sales|operations|ops|product|design|backend|frontend|legal|infra|devops|it|data|research|support|customer success|cs)\b"
-        r"|\bwhat does (the |our )?(engineering|hr|finance|marketing|sales|operations|ops|product|design|backend|frontend|legal|infra|devops|it|data|research|support|customer success|cs) (team )?do\b",
+        r"|\bwhat does (the |our )?(engineering|hr|finance|marketing|sales|operations|ops|product|design|backend|frontend|legal|infra|devops|it|data|research|support|customer success|cs) (team )?do\b"
+        r"|\b(which|what|list|all) teams?\b",
         re.I,
     )),
     # Person
     ("person", re.compile(
         r"^(who is|who's|who works on|who leads|who runs|contact for|email of)\b", re.I,
     )),
-    # Project
+    # Project — specific + listing variants
     ("project", re.compile(
-        r"\b(status of|lead of|who runs project|project status|progress on|deadline of)\b", re.I,
+        r"\b(status of|lead of|who runs project|project status|progress on|deadline of)\b"
+        r"|\b(which|what|list|all|ongoing|active|current|open) projects?\b"
+        r"|\bprojects?\b.*\b(ongoing|active|current|in progress)\b",
+        re.I,
     )),
     # Event
     ("event", re.compile(

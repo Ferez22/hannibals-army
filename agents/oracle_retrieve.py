@@ -11,6 +11,7 @@ Each retriever returns a dict:
 from __future__ import annotations
 
 import logging
+import re
 from typing import Any
 
 import config
@@ -156,6 +157,9 @@ def _team(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str, A
     if not candidates:
         hits = kg.search(question, k=K_DEFAULT, entity_type="Team")
         candidates = [n for n in (kg.get_live(h["node_id"]) for h in hits) if n]
+    # Generic "list teams" / "which teams" → no specific match → return all
+    if not candidates or _is_list_query(question, "team"):
+        candidates = kg.list_live("Team")
     return _build_entity_block(kg, candidates, label="TEAM")
 
 
@@ -164,15 +168,34 @@ def _project(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str
     if not candidates:
         hits = kg.search(question, k=K_DEFAULT, entity_type="Project")
         candidates = [n for n in (kg.get_live(h["node_id"]) for h in hits) if n]
+    # Generic "which projects" / "list projects" / "ongoing projects" → all
+    if not candidates or _is_list_query(question, "project"):
+        candidates = kg.list_live("Project")
     return _build_entity_block(kg, candidates, label="PROJECT")
 
 
 def _client(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str, Any]:
     candidates = _find_by_name(kg, "Client", entities + _extract_names(question))
-    if not candidates:
-        # No specific client — return list of all clients
+    if not candidates or _is_list_query(question, "client"):
         candidates = kg.list_live("Client")
     return _build_entity_block(kg, candidates, label="CLIENT")
+
+
+_LIST_PATTERNS = re.compile(
+    r"\b(which|what|list|all|every|ongoing|active|current|open)\b",
+    re.I,
+)
+
+
+def _is_list_query(question: str, entity_type: str) -> bool:
+    """Detect 'which X are ...' / 'list all X' / 'ongoing X' style queries.
+
+    These should return the full set of that type so the LLM can summarize/filter.
+    """
+    q = question.lower()
+    if entity_type not in q and f"{entity_type}s" not in q:
+        return False
+    return bool(_LIST_PATTERNS.search(question))
 
 
 def _rule(kg: KnowledgeGraph, question: str) -> dict[str, Any]:
