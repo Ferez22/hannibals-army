@@ -6,7 +6,7 @@ from __future__ import annotations
 
 from textual import on
 from textual.app import ComposeResult
-from textual.containers import Horizontal, Vertical
+from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
 from textual.widgets import Button, DataTable, Footer, Header, Input, Select, Static
 
@@ -25,32 +25,33 @@ class TeamsScreen(Screen):
             classes="section-title",
         )
         yield Static("", id="t-banner")
-        with Horizontal():
-            with Vertical():
+        with Horizontal(classes="split-pane"):
+            with VerticalScroll(classes="split-pane-left"):
                 yield DataTable(id="t-table", zebra_stripes=True)
-                yield Static("[bold #F5A623]Create team[/]", classes="dim")
-                with Horizontal(classes="t-row"):
-                    yield Input(placeholder="team name", id="t-new-name")
-                    yield Input(placeholder="mission (optional)", id="t-new-mission")
-                with Horizontal(classes="t-row"):
-                    yield Select(
-                        options=[("internal", "internal"), ("external", "external")],
-                        id="t-new-kind",
-                        prompt="kind",
-                        value="internal",
-                        allow_blank=False,
-                    )
-                    yield Input(
-                        placeholder="external org (only if external)",
-                        id="t-new-extorg",
-                    )
-                with Horizontal(classes="t-row"):
-                    yield Select(options=[], id="t-new-parent", prompt="parent (optional)")
-                    yield Button("Create", variant="primary", id="t-create")
-            with Vertical():
+                with Vertical(classes="team-card"):
+                    yield Static("[bold #F5A623]Create team[/]", classes="card-title")
+                    with Horizontal(classes="t-row"):
+                        yield Input(placeholder="team name", id="t-new-name")
+                        yield Input(placeholder="mission (optional)", id="t-new-mission")
+                    with Horizontal(classes="t-row"):
+                        yield Select(
+                            options=[("internal", "internal"), ("external", "external")],
+                            id="t-new-kind",
+                            prompt="kind",
+                            value="internal",
+                            allow_blank=False,
+                        )
+                        yield Input(
+                            placeholder="external org (only if external)",
+                            id="t-new-extorg",
+                        )
+                    with Horizontal(classes="t-row"):
+                        yield Select(options=[], id="t-new-parent", prompt="parent (optional)")
+                        yield Button("Create", variant="primary", id="t-create")
+            with VerticalScroll(classes="split-pane-right"):
                 yield Static("[dim]select a team to manage members[/]", id="t-detail")
-                with Vertical(id="t-add-form"):
-                    yield Static("[bold #F5A623]Add member[/]", classes="dim")
+                with Vertical(classes="team-card"):
+                    yield Static("[bold #2ECC71]Add member[/]", classes="card-title")
                     with Horizontal(classes="t-row"):
                         yield Select(options=[], id="t-add-person", prompt="pick person")
                     with Horizontal(classes="t-row"):
@@ -58,11 +59,12 @@ class TeamsScreen(Screen):
                         yield Input(placeholder="sub-roles (comma-separated)", id="t-add-subroles")
                     with Horizontal(classes="t-row"):
                         yield Button("Add member", variant="success", id="t-add")
-                    yield Static("[bold #F5A623]Remove member[/]", classes="dim")
+                    yield Static("", id="t-warning")
+                with Vertical(classes="team-card"):
+                    yield Static("[bold #E74C3C]Remove member[/]", classes="card-title")
                     with Horizontal(classes="t-row"):
                         yield Select(options=[], id="t-rm-member", prompt="pick member")
                         yield Button("Remove", variant="error", id="t-rm")
-                    yield Static("", id="t-warning")
         yield Footer()
 
     def on_mount(self) -> None:

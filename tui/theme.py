@@ -148,13 +148,23 @@ RichLog {
     height: 1fr;
 }
 .split-pane-left, .split-pane-right {
-    width: 1fr;
     height: 1fr;
+    overflow-x: hidden;
     overflow-y: auto;
     padding: 0 1;
 }
 .split-pane-left {
+    width: 2fr;
     border-right: tall #4A5568;
+}
+.split-pane-right {
+    width: 3fr;
+}
+/* Force DataTables in split panes to fill */
+.split-pane-left > DataTable,
+.split-pane-right > DataTable {
+    width: 1fr;
+    height: 1fr;
 }
 
 /* Ingest input row layout */
@@ -377,7 +387,7 @@ Horizontal {
 /* Teams screen */
 .t-row {
     height: auto;
-    margin: 0;
+    margin: 1 0;
 }
 .t-row Input, .t-row Select, .t-row Button {
     width: 1fr;
@@ -391,15 +401,23 @@ Horizontal {
 #t-table {
     width: 1fr;
     height: 12;
+    margin-bottom: 1;
 }
 #t-detail {
     border: tall #4A5568;
     padding: 1 1;
-    height: 12;
-}
-#t-add-form {
     height: auto;
-    padding: 0 1;
+    min-height: 8;
+    margin-bottom: 1;
+}
+.team-card {
+    border: round #4A5568;
+    padding: 1 1;
+    margin: 1 0;
+    height: auto;
+}
+.card-title {
+    margin-bottom: 1;
 }
 #t-warning {
     color: #F5D020;
