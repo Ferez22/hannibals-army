@@ -37,6 +37,7 @@ docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md, graph-d
 | RAGNAR | Ingestion — parses any supported format into RawDocument |
 | CARTOGRAPHER | LLM extraction → staging → dedup → promotion → writes live KG + YAML mirror |
 | ORACLE | Intent router → per-intent retriever → synthesizer. Intents: `person`, `project`, `team`, `client`, `summary`, `config_edit`, `generic`. Lexical patterns in `oracle_intent.py:LEXICAL_PATTERNS` fast-path; LLM classifier fallback. Synthesis auto-switches to OpenAI when `OPENAI_API_KEY` set, else local Ollama. |
+| SENTINEL | Tier classifier (Phase 10B). Runs post-extraction in `core/ingestion_pipeline.py`. Two-stage: rule signals first (`capabilities/tier_classify.py:RULE_SIGNALS`), LLM fallback on miss. Writes `doc_kind`, `tier`, `tier_reason` to live Document. `tier_confirmed_*` stays empty until admin confirms in Browser. |
 | DONNA | Validator — staleness scan, conflict detection, rule notifications (TUI + Telegram), auto-scan on startup if last > 24h |
 
 ## Key design decisions (DO NOT change without discussion)
@@ -58,6 +59,16 @@ docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md, graph-d
 15. **ORACLE intent router is two-stage** — fast lexical regex in `oracle_intent.py:LEXICAL_PATTERNS` first; only falls through to LLM classifier on no match. When adding new question shapes, prefer extending lexical patterns over re-prompting the classifier.
 16. **CEO config edits via Telegram are gated** — `config_edit` intent produces a YAML patch proposal with inline buttons (confirm/cancel). `capabilities/config_patch.py` applies the patch with `_meta.edit_history` audit. Never write to `company-config.yml` from Telegram without CEO callback confirmation.
 17. **Telegram identity** — `Person.telegram_chat_id` resolves the sender. `/register` command binds chat → person. Unknown chats only get a generic refusal; never expose KG content without resolution.
+18. **Tier pyramid (Phase 10A)** — `ceo < c_level < director < manager < everyone`. Lower rank = more access. `config.TIERS` + `tier_rank()`. Adding tier = append + remap. Storage uses label strings; comparison via rank at query time.
+19. **Default tier on ambiguous docs = `director`** — conservative. Over-restrict beats leak. Unconfirmed-tier docs (`tier_confirmed_by` unset) are visible only to CEO + owner.
+20. **Sender resolution failure → `UNKNOWN_SENDER_TIER` (everyone)** — Telegram chat without resolved Person gets baseline tier. `/register` mandatory before tier elevation. Admin chat is always `ceo` tier regardless of Person resolution.
+21. **Tier filter lives in `capabilities/retriever.py:_tier_filter`** — chunks post-filtered against `live_nodes.fields_json` for tier + owner_id. Threaded through ORACLE via `sender_tier_rank` + `sender_person_id` in retrieve ctx. Ownership beats tier (owner sees own docs regardless).
+22. **Tier confirmation is CEO-gated in Pending** — `tui/screens/pending.py` exposes tier `Select`; `_promote_person` writes `tier` + `tier_confirmed=True` only at promotion time.
+23. **SENTINEL runs at ingest, not retrieval (Phase 10B)** — tier proposal baked into Document fields after CARTOGRAPHER extracts, before chunk-embed. Rules-first (deterministic) then LLM fallback. Admin reviews + confirms in Browser tier picker. Re-classify requires re-ingest.
+24. **Document confirmation lives in Browser, not Pending** — Documents auto-promote to live (chunking depends on it). Browser detail surfaces SENTINEL proposal + tier picker + Confirm button. Until confirmed, `_tier_filter` gates the doc to CEO + owner only.
+25. **SENTINEL learning loop (Phase 10B.6–10B.8)** — every Browser tier confirmation writes to `tier_corrections` SQLite table via `capabilities/tier_memory.py`. Embedding (sentence-transformers MiniLM) stored as float32 BLOB. On next ingest, SENTINEL pulls top-K (`TOPK_FEWSHOT=5`) nearest past corrections by cosine and injects them as few-shot examples in the LLM prompt. Rules path is unaffected. Confirmations are recorded regardless of agreement; only disagreements set `is_override=1`.
+26. **Lazy reason capture** — Browser confirm is silent when CEO picks SENTINEL's tier. When tiers differ, an `Input` appears and reason is required before the override is applied. Reasons feed back into the few-shot prompt to teach the model *why* a class of docs is reclassified.
+27. **Rule mining is stub-only in 10B** — `tier_memory.mine_rule_candidates()` aggregates overrides per tier and finds repeating title n-grams (≥3 support). Not auto-applied; surfaced for manual CEO confirmation in a future TUI screen (deferred to Phase 11+).
 
 ## Running
 
@@ -125,3 +136,5 @@ See `docs/ARMY_PLAN.md` (status) and `docs/ROADMAP.md` (next).
 6. ORACLE synthesis silently routes to OpenAI when `OPENAI_API_KEY` is set — sensitive KG content leaves the box. Strip the key in `.env` to force local-only.
 7. Telegram bot runs in a background thread when `--with-bot`. It shares the KG handle; long-running CEO patches must not block the polling loop (use the dispatch pattern in `capabilities/telegram_bot.py`).
 8. Markdown rendering split: Telegram uses HTML subset (`capabilities/text_render.py:to_telegram_html`); TUI uses Rich Markdown. Same source string; do not embed Telegram-specific tags in answers.
+9. Tier filter is enforced on chunks only (Phase 10A). Entity-level retrieval (Persons, Projects, etc.) is NOT yet tier-filtered. Phase 10B+ extends to entities. For now, KG entity facts are visible to all senders; only document chunks are gated.
+10. Pre-10A legacy docs in `db/graph.db` lack tier metadata → treated as `director` unconfirmed → visible only to CEO + owner. Wipe + reingest (or one-off SQL migration) before broader manager rollout.

@@ -90,9 +90,14 @@ def _handle_update(u: dict) -> None:
 
 
 def _resolve_sender(chat_id: str, msg: dict) -> dict:
-    """Return {chat_id, person_id, person_name, is_ceo, display}.
+    """Return {chat_id, person_id, person_name, is_ceo, tier, display}.
 
     Admin chat_id is always CEO. Other chats look up Person.telegram_chat_id.
+    Tier resolution (Phase 10A):
+      - admin → 'ceo'
+      - Person with tier_confirmed=True → person.tier
+      - Person without confirmation → UNKNOWN_SENDER_TIER (gate until CEO confirms)
+      - unknown chat → UNKNOWN_SENDER_TIER
     """
     from core.ingestion_pipeline import get_kg
     kg = get_kg()
@@ -106,15 +111,23 @@ def _resolve_sender(chat_id: str, msg: dict) -> dict:
 
     name = ""
     role = ""
+    person_tier = config.UNKNOWN_SENDER_TIER
+    tier_confirmed = False
     if person_node:
-        name = person_node["fields"].get("name", "")
-        role = (person_node["fields"].get("role") or "").lower()
-        subs = " ".join(s.lower() for s in (person_node["fields"].get("sub_roles") or []))
+        f = person_node["fields"]
+        name = f.get("name", "")
+        role = (f.get("role") or "").lower()
+        subs = " ".join(s.lower() for s in (f.get("sub_roles") or []))
         role = role + " " + subs
+        tier_confirmed = bool(f.get("tier_confirmed"))
+        if tier_confirmed:
+            person_tier = f.get("tier") or config.UNKNOWN_SENDER_TIER
     elif msg.get("from", {}).get("first_name"):
         name = msg["from"]["first_name"]
 
     is_ceo = is_admin or any(k in role for k in ("ceo", "cto", "founder", "admin"))
+    # Admin is always CEO tier; other senders use their confirmed tier or fallback.
+    effective_tier = "ceo" if is_admin else person_tier
 
     return {
         "chat_id": chat_id,
@@ -122,6 +135,8 @@ def _resolve_sender(chat_id: str, msg: dict) -> dict:
         "person_name": name,
         "is_admin": is_admin,
         "is_ceo": is_ceo,
+        "tier": effective_tier,
+        "tier_confirmed": tier_confirmed or is_admin,
         "display": name or f"chat:{chat_id}",
     }
 
@@ -173,6 +188,8 @@ def _reply_me(chat_id: str, sender: dict) -> None:
         lines.append(f"<b>person_id</b>: <code>{sender['person_id']}</code>")
     lines.append(f"<b>admin</b>: {'yes' if sender['is_admin'] else 'no'}")
     lines.append(f"<b>CEO privileges</b>: {'yes' if sender['is_ceo'] else 'no'}")
+    lines.append(f"<b>tier</b>: <code>{_esc(sender.get('tier', 'everyone'))}</code>"
+                 f"  {'(confirmed)' if sender.get('tier_confirmed') else '(unconfirmed → baseline)'}")
     notifier.send_telegram("\n".join(lines), chat_id=chat_id)
 
 
@@ -258,8 +275,12 @@ def _handle_freetext(text: str, chat_id: str, sender: dict) -> None:
         _propose_edit(text, chat_id, sender)
         return
 
-    # Regular query
-    result = ORACLE.invoke({"question": text})
+    # Regular query — pass sender tier + person_id for retrieval filter
+    result = ORACLE.invoke({
+        "question": text,
+        "sender_person_id": sender.get("person_id"),
+        "sender_tier": sender.get("tier"),
+    })
     if not result.success:
         notifier.send_telegram(f"Error: {_esc(result.error or '')}", chat_id=chat_id)
         return

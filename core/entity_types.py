@@ -19,6 +19,10 @@ class MemoryFields(BaseModel):
 # ---------------------------------------------------------------------------
 # Entities
 # ---------------------------------------------------------------------------
+TierLabel = Literal["ceo", "c_level", "director", "manager", "everyone"]
+DocKind = Literal["contract", "private", "general", "presentation", "report", "policy"]
+
+
 class Person(MemoryFields):
     id: str
     company_id: str
@@ -33,6 +37,8 @@ class Person(MemoryFields):
     photo_path: str | None = None  # relative to REPO_ROOT
     external_company: str | None = None  # only set when kind == "external"
     telegram_chat_id: str | None = None  # for Telegram bot auth (CEO edits, identified Q&A)
+    tier: TierLabel = "everyone"
+    tier_confirmed: bool = False  # CEO must confirm in Pending before sender_tier elevates
 
 
 class Team(MemoryFields):
@@ -100,6 +106,13 @@ class Document(MemoryFields):
     date: str | None = None
     raw_path: str | None = None
     ingested_at: datetime | None = None
+    # Tier / classification (Phase 10A)
+    tier: TierLabel = "director"
+    doc_kind: DocKind | None = None
+    tier_reason: str | None = None
+    tier_confirmed_by: str | None = None
+    tier_confirmed_at: datetime | None = None
+    owner_id: str | None = None  # Person who owns this doc — ownership beats tier
 
 
 # ---------------------------------------------------------------------------

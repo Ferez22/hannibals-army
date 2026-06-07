@@ -122,6 +122,27 @@ CREATE TABLE IF NOT EXISTS document_chunks (
 );
 CREATE INDEX IF NOT EXISTS idx_doc_chunks_company ON document_chunks(company_id);
 CREATE INDEX IF NOT EXISTS idx_doc_chunks_doc ON document_chunks(doc_id);
+
+CREATE TABLE IF NOT EXISTS tier_corrections (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id TEXT NOT NULL,
+    doc_id TEXT,
+    doc_title TEXT NOT NULL,
+    doc_excerpt TEXT NOT NULL,
+    embedding BLOB,
+    sentinel_kind TEXT,
+    sentinel_tier TEXT,
+    sentinel_reason TEXT,
+    sentinel_source TEXT,
+    ceo_kind TEXT,
+    ceo_tier TEXT NOT NULL,
+    ceo_reason TEXT,
+    is_override INTEGER NOT NULL DEFAULT 0,
+    override_at TEXT NOT NULL,
+    override_by TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_tier_corr_company ON tier_corrections(company_id);
+CREATE INDEX IF NOT EXISTS idx_tier_corr_override ON tier_corrections(company_id, is_override);
 """
 
 

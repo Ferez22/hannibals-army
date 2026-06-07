@@ -24,11 +24,19 @@ class Oracle(BaseAgent):
         super().__init__(kg=kg)
 
     def invoke(self, task: dict[str, Any]) -> AgentResult:
+        import config
+
         question = (task.get("question") or "").strip()
         if not question:
             return AgentResult(False, error="missing 'question'")
         if self.kg is None:
             return AgentResult(False, error="oracle has no KG bound")
+
+        # Sender identity (Phase 10A) — Telegram path or TUI path injects sender_person_id.
+        # Unknown sender = UNKNOWN_SENDER_TIER (everyone) — content access still filtered.
+        sender_person_id: str | None = task.get("sender_person_id")
+        sender_tier: str = task.get("sender_tier") or config.UNKNOWN_SENDER_TIER
+        sender_tier_rank = config.tier_rank(sender_tier)
 
         # 1) Classify intent
         intent_info = oracle_intent.classify(question)
@@ -36,7 +44,8 @@ class Oracle(BaseAgent):
         log.info(
             "intent_classified",
             extra={"intent": intent, "source": intent_info.get("source"),
-                   "needs_clarification": intent_info["needs_clarification"]},
+                   "needs_clarification": intent_info["needs_clarification"],
+                   "sender_tier": sender_tier},
         )
 
         # 2) Clarification short-circuit
@@ -53,7 +62,10 @@ class Oracle(BaseAgent):
 
         # 3) Retrieve per intent
         retrieval = oracle_retrieve.retrieve(
-            self.kg, intent, question, entities_referenced=intent_info["entities_referenced"]
+            self.kg, intent, question,
+            entities_referenced=intent_info["entities_referenced"],
+            sender_tier_rank=sender_tier_rank,
+            sender_person_id=sender_person_id,
         )
 
         # 4) Synthesize answer

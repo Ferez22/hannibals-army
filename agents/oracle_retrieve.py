@@ -29,26 +29,29 @@ def retrieve(
     intent: str,
     question: str,
     entities_referenced: list[str] | None = None,
+    sender_tier_rank: int | None = None,
+    sender_person_id: str | None = None,
 ) -> dict[str, Any]:
     entities_referenced = entities_referenced or []
+    ctx = {"sender_tier_rank": sender_tier_rank, "sender_person_id": sender_person_id}
     if intent == "company":
         return _company(question)
     if intent == "culture":
         return _culture(kg, question)
     if intent == "person":
-        return _person(kg, question, entities_referenced)
+        return _person(kg, question, entities_referenced, ctx)
     if intent == "team":
-        return _team(kg, question, entities_referenced)
+        return _team(kg, question, entities_referenced, ctx)
     if intent == "project":
-        return _project(kg, question, entities_referenced)
+        return _project(kg, question, entities_referenced, ctx)
     if intent == "client":
-        return _client(kg, question, entities_referenced)
+        return _client(kg, question, entities_referenced, ctx)
     if intent == "rule":
-        return _rule(kg, question)
+        return _rule(kg, question, ctx)
     if intent == "event":
-        return _event(kg, question, entities_referenced)
+        return _event(kg, question, entities_referenced, ctx)
     if intent == "document":
-        return _document(kg, question)
+        return _document(kg, question, ctx)
     if intent == "summary":
         return _summary(kg)
     return {"source_blocks": [], "cited_ids": [], "expanded": {}, "chunks": []}
@@ -113,7 +116,16 @@ def _culture(kg: KnowledgeGraph, question: str) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
-def _person(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str, Any]:
+def _chunks(kg, question: str, ctx: dict, k: int) -> list[dict]:
+    """Wrapper around hybrid_search_chunks that injects sender tier filter."""
+    return retriever.hybrid_search_chunks(
+        kg, question, k=k,
+        sender_tier_rank=ctx.get("sender_tier_rank"),
+        sender_person_id=ctx.get("sender_person_id"),
+    )
+
+
+def _person(kg: KnowledgeGraph, question: str, entities: list[str], ctx: dict | None = None) -> dict[str, Any]:
     # Resolve names from question + entities_referenced
     candidates = _find_persons_by_name(kg, entities + _extract_names(question))
     if not candidates:
@@ -121,7 +133,7 @@ def _person(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str,
         hits = kg.search(question, k=K_DEFAULT, entity_type="Person")
         candidates = [kg.get_live(h["node_id"]) for h in hits]
         candidates = [c for c in candidates if c]
-    result = _build_entity_block(kg, candidates, label="PERSON")
+    result = _build_entity_block(kg, candidates, label="PERSON", ctx=ctx)
     # Safety net — if question references a leadership role title, include the
     # leadership block from company-config.yml so the synthesizer has the answer
     # even if no matching Person node exists.
@@ -152,7 +164,7 @@ def _mentions_leadership_role(question: str) -> bool:
     return any(tok in q for tok in _LEADERSHIP_TOKENS)
 
 
-def _team(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str, Any]:
+def _team(kg: KnowledgeGraph, question: str, entities: list[str], ctx: dict | None = None) -> dict[str, Any]:
     candidates = _find_by_name(kg, "Team", entities + _extract_names(question))
     if not candidates:
         hits = kg.search(question, k=K_DEFAULT, entity_type="Team")
@@ -160,10 +172,10 @@ def _team(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str, A
     # Generic "list teams" / "which teams" → no specific match → return all
     if not candidates or _is_list_query(question, "team"):
         candidates = kg.list_live("Team")
-    return _build_entity_block(kg, candidates, label="TEAM")
+    return _build_entity_block(kg, candidates, label="TEAM", ctx=ctx)
 
 
-def _project(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str, Any]:
+def _project(kg: KnowledgeGraph, question: str, entities: list[str], ctx: dict | None = None) -> dict[str, Any]:
     candidates = _find_by_name(kg, "Project", entities + _extract_names(question))
     if not candidates:
         hits = kg.search(question, k=K_DEFAULT, entity_type="Project")
@@ -171,14 +183,14 @@ def _project(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str
     # Generic "which projects" / "list projects" / "ongoing projects" → all
     if not candidates or _is_list_query(question, "project"):
         candidates = kg.list_live("Project")
-    return _build_entity_block(kg, candidates, label="PROJECT")
+    return _build_entity_block(kg, candidates, label="PROJECT", ctx=ctx)
 
 
-def _client(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str, Any]:
+def _client(kg: KnowledgeGraph, question: str, entities: list[str], ctx: dict | None = None) -> dict[str, Any]:
     candidates = _find_by_name(kg, "Client", entities + _extract_names(question))
     if not candidates or _is_list_query(question, "client"):
         candidates = kg.list_live("Client")
-    return _build_entity_block(kg, candidates, label="CLIENT")
+    return _build_entity_block(kg, candidates, label="CLIENT", ctx=ctx)
 
 
 _LIST_PATTERNS = re.compile(
@@ -198,11 +210,12 @@ def _is_list_query(question: str, entity_type: str) -> bool:
     return bool(_LIST_PATTERNS.search(question))
 
 
-def _rule(kg: KnowledgeGraph, question: str) -> dict[str, Any]:
+def _rule(kg: KnowledgeGraph, question: str, ctx: dict | None = None) -> dict[str, Any]:
     """Rules need both KG and document chunks (policy text often in docs)."""
+    ctx = ctx or {}
     rule_hits = kg.search(question, k=K_CHUNKS_HEAVY, entity_type="Rule")
     rules = [n for n in (kg.get_live(h["node_id"]) for h in rule_hits) if n]
-    chunks = retriever.hybrid_search_chunks(kg, question, k=K_CHUNKS_HEAVY)
+    chunks = _chunks(kg, question, ctx, k=K_CHUNKS_HEAVY)
     blocks: list[str] = []
     cited: list[str] = []
     if rules:
@@ -218,17 +231,18 @@ def _rule(kg: KnowledgeGraph, question: str) -> dict[str, Any]:
             "expanded": {r["id"]: r for r in rules}, "chunks": chunks}
 
 
-def _event(kg: KnowledgeGraph, question: str, entities: list[str]) -> dict[str, Any]:
+def _event(kg: KnowledgeGraph, question: str, entities: list[str], ctx: dict | None = None) -> dict[str, Any]:
     candidates = _find_by_name(kg, "Event", entities + _extract_names(question))
     if not candidates:
         hits = kg.search(question, k=K_DEFAULT, entity_type="Event")
         candidates = [n for n in (kg.get_live(h["node_id"]) for h in hits) if n]
-    return _build_entity_block(kg, candidates, label="EVENT")
+    return _build_entity_block(kg, candidates, label="EVENT", ctx=ctx)
 
 
-def _document(kg: KnowledgeGraph, question: str) -> dict[str, Any]:
+def _document(kg: KnowledgeGraph, question: str, ctx: dict | None = None) -> dict[str, Any]:
     """Document-content questions — chunk search dominant."""
-    chunks = retriever.hybrid_search_chunks(kg, question, k=K_CHUNKS_HEAVY)
+    ctx = ctx or {}
+    chunks = _chunks(kg, question, ctx, k=K_CHUNKS_HEAVY)
     cited: list[str] = []
     blocks = [_chunk_block(chunks, cited)] if chunks else []
     return {"source_blocks": blocks, "cited_ids": cited, "expanded": {}, "chunks": chunks}
@@ -279,7 +293,8 @@ def _resolve_id_fields(kg: KnowledgeGraph, fields: dict[str, Any]) -> dict[str, 
 
 
 def _build_entity_block(
-    kg: KnowledgeGraph, candidates: list[dict], label: str
+    kg: KnowledgeGraph, candidates: list[dict], label: str,
+    ctx: dict | None = None,
 ) -> dict[str, Any]:
     """Build a richly-labeled source block per entity with explicit relationship sections."""
     if not candidates:
@@ -300,11 +315,12 @@ def _build_entity_block(
         cited.extend(neighbors)
 
     # Light chunk pull — name-based, top-3 per first 3 candidates
+    ctx = ctx or {}
     chunks: list[dict] = []
     for node in candidates[:3]:
         name = node["fields"].get("name") or node["fields"].get("title") or ""
         if name:
-            ch = retriever.hybrid_search_chunks(kg, name, k=3)
+            ch = _chunks(kg, name, ctx, k=3)
             chunks.extend(ch)
     if chunks:
         blocks.append(_chunk_block(chunks, []))

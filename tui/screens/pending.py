@@ -12,7 +12,9 @@ from textual import on
 from textual.app import ComposeResult
 from textual.containers import Horizontal, Vertical, VerticalScroll
 from textual.screen import Screen
-from textual.widgets import Button, DataTable, Footer, Header, Input, Static
+from textual.widgets import Button, DataTable, Footer, Header, Input, Select, Static
+
+import config
 
 from agents.cartographer import _entity_description
 from core.ingestion_pipeline import get_kg
@@ -35,6 +37,15 @@ class PendingScreen(Screen):
                     yield Button("→ External", variant="primary", id="p-promote-ext")
                     yield Button("→ Other",    variant="default", id="p-promote-other")
                     yield Button("Reject",     variant="error",   id="p-reject")
+                with Horizontal(id="p-tier-row"):
+                    yield Static("[#F5A623]Tier (Person):[/]", id="p-tier-label")
+                    yield Select(
+                        options=[(t, t) for t in config.TIERS],
+                        id="p-tier",
+                        prompt="tier",
+                        value=config.DEFAULT_PERSON_TIER,
+                        allow_blank=False,
+                    )
                 yield DataTable(id="p-table", zebra_stripes=True)
                 yield Static("", id="p-extform")
             with VerticalScroll(classes="split-pane-right"):
@@ -100,6 +111,9 @@ class PendingScreen(Screen):
         if et == "Person":
             kind = f.get("kind", "unknown")
             lines.append(f"  [#F5A623]kind:[/] [bold]{kind}[/]")
+            tier = f.get("tier", config.DEFAULT_PERSON_TIER)
+            confirmed = " [#2ECC71](confirmed)[/]" if f.get("tier_confirmed") else " [#F5D020](unconfirmed)[/]"
+            lines.append(f"  [#F5A623]tier:[/] [bold]{tier}[/]{confirmed}")
             emails = f.get("emails") or []
             if emails:
                 lines.append(f"  [#F5A623]emails:[/] {', '.join(emails)}")
@@ -246,6 +260,11 @@ class PendingScreen(Screen):
         new_fields["kind"] = kind
         if external_company is not None:
             new_fields["external_company"] = external_company
+        # Tier picker — CEO is confirming tier at promotion time
+        tier_sel = self.query_one("#p-tier", Select).value
+        if isinstance(tier_sel, str) and tier_sel in config.TIERS:
+            new_fields["tier"] = tier_sel
+            new_fields["tier_confirmed"] = True
         with kg.graph.conn() as c:
             c.execute(
                 "UPDATE staging_nodes SET fields_json = ? WHERE id = ?",

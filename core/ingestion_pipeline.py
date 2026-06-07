@@ -93,6 +93,25 @@ def ingest(source: str) -> AgentResult:
     except Exception as e:
         log.warning("summary_failed", extra={"doc_id": doc_live_id, "error": str(e)})
 
+    # 2a.bis SENTINEL — propose tier + doc_kind. Admin confirms later in Browser.
+    try:
+        from agents.sentinel import SENTINEL
+        sent = SENTINEL.invoke({
+            "title": raw_doc.metadata.get("filename", raw_doc.source),
+            "text": raw_doc.raw_text,
+            "kg": kg,
+        })
+        if sent.success:
+            d = sent.data
+            kg.update_live_field(doc_live_id, "doc_kind", d["doc_kind"])
+            kg.update_live_field(doc_live_id, "tier", d["tier"])
+            kg.update_live_field(doc_live_id, "tier_reason", d["reason"])
+            log.info("pipeline_sentinel_tagged",
+                     extra={"doc_id": doc_live_id, "tier": d["tier"],
+                            "doc_kind": d["doc_kind"], "source": d["source"]})
+    except Exception as e:
+        log.warning("sentinel_failed", extra={"doc_id": doc_live_id, "error": str(e)})
+
     # 2b. Chunk + embed the full text for document chat (RAG)
     try:
         chunks = chunker.chunk_text(raw_doc.raw_text)

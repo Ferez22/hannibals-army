@@ -384,6 +384,45 @@ Horizontal {
     margin: 1 0;
 }
 
+/* Browser tier confirm row (Document detail) */
+#b-tier-row {
+    height: auto;
+    margin: 1 0;
+    align: left middle;
+}
+#b-tier-label {
+    width: 8;
+    padding: 1 1 0 0;
+}
+#b-tier {
+    width: 18;
+    margin-right: 1;
+}
+#b-confirm-tier {
+    width: 18;
+}
+#b-tier-reason {
+    width: 1fr;
+    margin: 1 0;
+}
+.hidden {
+    display: none;
+}
+
+/* Pending tier picker row */
+#p-tier-row {
+    height: auto;
+    margin: 1 0;
+    align: left middle;
+}
+#p-tier-label {
+    width: 20;
+    padding: 1 1 0 0;
+}
+#p-tier {
+    width: 20;
+}
+
 /* Teams screen */
 .t-row {
     height: auto;

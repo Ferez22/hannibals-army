@@ -99,6 +99,24 @@ CHUNK_SIZE_TOKENS = 1500
 CHUNK_OVERLAP_TOKENS = 200
 
 # ---------------------------------------------------------------------------
+# Tier model (Phase 10A) — pyramid permission system
+# ---------------------------------------------------------------------------
+# Lower rank = more powerful. Ownership beats tier (handled in retriever).
+TIERS = ("ceo", "c_level", "director", "manager", "everyone")
+TIER_RANKS = {label: idx for idx, label in enumerate(TIERS)}
+DEFAULT_PERSON_TIER = "everyone"
+DEFAULT_DOC_TIER = "director"      # conservative default for unclassified docs
+UNKNOWN_SENDER_TIER = "everyone"   # unresolved chat_id falls through to baseline
+
+
+def tier_rank(label: str | None) -> int:
+    """Return rank for a tier label; unknown labels rank as everyone."""
+    if label is None:
+        return TIER_RANKS[DEFAULT_PERSON_TIER]
+    return TIER_RANKS.get(label, TIER_RANKS[DEFAULT_PERSON_TIER])
+
+
+# ---------------------------------------------------------------------------
 # Staging + Promotion
 # ---------------------------------------------------------------------------
 PENDING_AUTO_PAUSE_THRESHOLD = 200    # ingestion_paused = True when exceeded
