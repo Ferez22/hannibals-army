@@ -14,6 +14,9 @@ class MemoryFields(BaseModel):
     last_verified_at: datetime
     source_count: int = 0
     confidence: float = 0.0  # min(1, source_count/3) - 0.3*contradictions, clamped [0,1]
+    confirmed: bool = False  # admin reviewed + accepted (Phase 10D)
+    confirmed_by: str | None = None
+    confirmed_at: datetime | None = None
 
 
 # ---------------------------------------------------------------------------
@@ -61,6 +64,7 @@ class Project(MemoryFields):
     status: str | None = None  # "In Progress" | "On Hold" | "Done" | "Cancelled"
     client_id: str | None = None  # required when kind == "external"
     team_id: str | None = None
+    owner_id: str | None = None  # Person responsible — ownership beats tier (Phase 10C)
     started: str | None = None
     target: str | None = None
     description: str | None = None

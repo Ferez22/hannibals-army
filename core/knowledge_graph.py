@@ -78,9 +78,17 @@ class KnowledgeGraph:
             properties=properties,
         )
 
-    def promote(self, staging_id: str, description: str) -> str:
-        """Promote staging node → live, embed description in vector store."""
+    def promote(self, staging_id: str, description: str, *, confirmed: bool = False) -> str:
+        """Promote staging node → live, embed description in vector store.
+
+        `confirmed=False` (default): node enters the graph but ORACLE flags
+        answers that cite it as "may include unconfirmed entries". Admin can
+        flip via `confirm_node()`. `confirmed=True`: human-initiated path (TUI
+        manual create, Pending screen confirm) — no banner needed.
+        """
         live_id = self.graph.promote_staging(staging_id)
+        if confirmed:
+            self.graph.confirm_node(live_id, by="auto-promote-confirmed-path")
         node = self.graph.get_live_node(live_id)
         if node:
             self.vectors.add(
@@ -185,3 +193,13 @@ class KnowledgeGraph:
 
     def list_pending(self) -> list[dict]:
         return self.graph.list_staging_nodes(self.company_id, "pending")
+
+    # ---- Confirmation (Phase 10D) — auto-promoted nodes need admin sign-off ----
+    def list_unconfirmed(self, entity_type: str | None = None) -> list[dict]:
+        return self.graph.list_unconfirmed_nodes(self.company_id, entity_type)
+
+    def unconfirmed_count(self) -> int:
+        return self.graph.unconfirmed_count(self.company_id)
+
+    def confirm_node(self, node_id: str, by: str) -> None:
+        self.graph.confirm_node(node_id, by)

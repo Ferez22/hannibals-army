@@ -1,0 +1,107 @@
+Table Company {
+  id integer [primary key]
+  name varchar
+  industry varchar
+  founded timestamp
+  hq varchar
+  website varchar
+}
+
+Table Location {
+  id integer [primary key]
+  company_id integer [ref: > Company.id]
+  name varchar 
+  city varchar
+  country varchar
+  timezone varchar
+}
+
+Table Department {
+  id integer [primary key]
+  company_id integer [ref: > Company.id]
+  name varchar 
+  budget_code varchar
+}
+
+Table Employee {
+  id integer [primary key]
+  company_id integer [ref: > Company.id]
+  location_id integer [ref: > Location.id] 
+  first_name varchar
+  last_name varchar
+  email varchar
+  role varchar 
+  employment_type varchar 
+  hire_date date
+  status varchar 
+  
+  direct_manager_id integer [ref: > Employee.id] 
+  team_id integer [ref: > Team.id] 
+  subteam_id integer [ref: > Team.id] 
+}
+
+// New table to house the array of social links per employee
+Table Employee_Social {
+  id integer [primary key]
+  employee_id integer [ref: > Employee.id]
+  platform varchar // e.g., 'LinkedIn', 'GitHub', 'Personal Website'
+  url varchar
+}
+
+Table Team {
+  id integer [primary key]
+  department_id integer [ref: > Department.id] 
+  name varchar
+  parent_team_id integer [ref: > Team.id] 
+  manager_id integer [ref: > Employee.id]
+  team_lead_id integer [ref: > Employee.id]
+}
+
+Table Board {
+  id integer [primary key]
+  company_id integer [ref: > Company.id]
+  board_type varchar 
+}
+
+Table Board_Member {
+  board_id integer [ref: > Board.id]
+  employee_id integer [ref: > Employee.id]
+  role varchar 
+  primary key (board_id, employee_id)
+}
+
+Table Client {
+  id integer [primary key]
+  company_id integer [ref: > Company.id]
+  location_id integer [ref: > Location.id] 
+  name varchar
+  industry varchar
+}
+
+Table Project {
+  id integer [primary key]
+  company_id integer [ref: > Company.id]
+  name varchar
+  project_type varchar 
+  client_id integer [ref: > Client.id] 
+}
+
+// Many-to-Many Join Tables
+
+Table Employee_Project {
+  employee_id integer [ref: > Employee.id]
+  project_id integer [ref: > Project.id]
+  primary key (employee_id, project_id)
+}
+
+Table Team_Project {
+  team_id integer [ref: > Team.id]
+  project_id integer [ref: > Project.id]
+  primary key (team_id, project_id)
+}
+
+Table Client_Team {
+  client_id integer [ref: > Client.id]
+  team_id integer [ref: > Team.id]
+  primary key (client_id, team_id)
+}

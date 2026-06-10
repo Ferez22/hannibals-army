@@ -34,27 +34,34 @@ def retrieve(
 ) -> dict[str, Any]:
     entities_referenced = entities_referenced or []
     ctx = {"sender_tier_rank": sender_tier_rank, "sender_person_id": sender_person_id}
+
     if intent == "company":
-        return _company(question)
-    if intent == "culture":
-        return _culture(kg, question)
-    if intent == "person":
-        return _person(kg, question, entities_referenced, ctx)
-    if intent == "team":
-        return _team(kg, question, entities_referenced, ctx)
-    if intent == "project":
-        return _project(kg, question, entities_referenced, ctx)
-    if intent == "client":
-        return _client(kg, question, entities_referenced, ctx)
-    if intent == "rule":
-        return _rule(kg, question, ctx)
-    if intent == "event":
-        return _event(kg, question, entities_referenced, ctx)
-    if intent == "document":
-        return _document(kg, question, ctx)
-    if intent == "summary":
-        return _summary(kg)
-    return {"source_blocks": [], "cited_ids": [], "expanded": {}, "chunks": []}
+        result = _company(question)
+    elif intent == "culture":
+        result = _culture(kg, question)
+    elif intent == "person":
+        result = _person(kg, question, entities_referenced, ctx)
+    elif intent == "team":
+        result = _team(kg, question, entities_referenced, ctx)
+    elif intent == "project":
+        result = _project(kg, question, entities_referenced, ctx)
+    elif intent == "client":
+        result = _client(kg, question, entities_referenced, ctx)
+    elif intent == "rule":
+        result = _rule(kg, question, ctx)
+    elif intent == "event":
+        result = _event(kg, question, entities_referenced, ctx)
+    elif intent == "document":
+        result = _document(kg, question, ctx)
+    elif intent == "summary":
+        result = _summary(kg)
+    else:
+        result = {"source_blocks": [], "cited_ids": [], "expanded": {}, "chunks": []}
+
+    # Phase 10D: surface unconfirmed flag for synthesizer banner
+    expanded_nodes = list(result.get("expanded", {}).values())
+    result["has_unconfirmed"] = _has_unconfirmed(expanded_nodes)
+    return result
 
 
 # ---------------------------------------------------------------------------
@@ -290,6 +297,10 @@ def _resolve_id_fields(kg: KnowledgeGraph, fields: dict[str, Any]) -> dict[str, 
         else:
             out[k] = v
     return out
+
+
+def _has_unconfirmed(nodes: list[dict]) -> bool:
+    return any(not n.get("confirmed", False) for n in nodes if n)
 
 
 def _build_entity_block(

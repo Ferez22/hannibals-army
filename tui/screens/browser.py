@@ -19,6 +19,16 @@ from core.ingestion_pipeline import get_kg
 ENTITY_TYPES = ["Person", "Team", "Project", "Client", "Rule", "Event", "Document"]
 
 
+def _resolve_person_label(person_id: str | None) -> str:
+    """Render `Name (id)` for a Person id; '—' when unset; raw id when unresolved."""
+    if not person_id:
+        return "—"
+    node = get_kg().get_live(person_id)
+    if not node:
+        return f"{person_id} [dim](unresolved)[/]"
+    return f"{node['fields'].get('name', '?')}  [dim]{person_id}[/]"
+
+
 class BrowserScreen(Screen):
     BINDINGS = [
         ("left",  "prev_type", "Prev type"),
@@ -90,6 +100,8 @@ class BrowserScreen(Screen):
             conf = n["confidence"]
             color = "#2ECC71" if conf >= 0.6 else ("#F5A623" if conf >= 0.3 else "#E74C3C")
             name_cell = Text(str(name))
+            if not n.get("confirmed", False):
+                name_cell.append("  ⚠unconfirmed", style="bold #F5D020")
             if is_stale(n):
                 name_cell.append("  ●stale", style="bold #E74C3C")
             conf_cell = Text(f"{conf:.2f}", style=color)
@@ -255,6 +267,11 @@ class BrowserScreen(Screen):
                     tier_sel.value = current_tier
             except Exception:
                 pass
+        confirmed_badge = (
+            f"[#2ECC71]confirmed[/] by {node.get('confirmed_by') or '?'} @ {node.get('confirmed_at') or '?'}"
+            if node.get("confirmed")
+            else "[#F5D020]unconfirmed[/] (auto-promoted — review in Audit screen)"
+        )
         lines = [
             f"[bold #5BC8F5]{node['id']}[/]",
             f"[dim]type:[/] {node['entity_type']}",
@@ -262,6 +279,7 @@ class BrowserScreen(Screen):
             f"[dim]source_count:[/] {node['source_count']}",
             f"[dim]created:[/] {node['created_at']}",
             f"[dim]last_verified:[/] {node['last_verified_at']}",
+            f"[dim]review:[/] {confirmed_badge}",
         ]
         if et == "Document":
             f = node["fields"]
@@ -272,10 +290,19 @@ class BrowserScreen(Screen):
             reason = f.get("tier_reason") or "—"
             badge = (f"[#2ECC71]confirmed[/] by {confirmed_by} @ {confirmed_at}"
                      if confirmed_by else "[#F5D020]unconfirmed[/]")
+            owner_label = _resolve_person_label(f.get("owner_id"))
             lines.extend([
                 "",
                 f"[bold #F5A623]SENTINEL[/]  kind=[bold]{kind}[/]  tier=[bold]{tier}[/]  {badge}",
                 f"[dim]reason:[/] {reason}",
+                f"[#F5A623]owner:[/] {owner_label}  [dim](ownership beats tier)[/]",
+            ])
+        elif et == "Project":
+            f = node["fields"]
+            owner_label = _resolve_person_label(f.get("owner_id"))
+            lines.extend([
+                "",
+                f"[#F5A623]owner:[/] {owner_label}  [dim](ownership beats tier)[/]",
             ])
         lines.extend([
             "",

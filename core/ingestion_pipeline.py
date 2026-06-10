@@ -48,6 +48,26 @@ def _refresh_status(kg: KnowledgeGraph) -> None:
         _STATUS.ingestion_paused = True
 
 
+def _resolve_uploader_person_id(kg: KnowledgeGraph) -> str | None:
+    """TUI ingest path uses admin = CEO. Find a Person whose telegram_chat_id
+    matches `TELEGRAM_ADMIN_CHAT_ID`, falling back to the first Person with
+    `role` containing ceo/founder. Returns None if no match — Document is then
+    visible only via tier rules.
+    """
+    admin_chat = (config.TELEGRAM_ADMIN_CHAT_ID or "").strip()
+    persons = kg.list_live("Person")
+    if admin_chat:
+        for p in persons:
+            if (p["fields"].get("telegram_chat_id") or "") == admin_chat:
+                return p["id"]
+    for p in persons:
+        role = (p["fields"].get("role") or "").lower()
+        subs = " ".join(s.lower() for s in (p["fields"].get("sub_roles") or []))
+        if any(k in role or k in subs for k in ("ceo", "founder")):
+            return p["id"]
+    return None
+
+
 def ingest(source: str) -> AgentResult:
     """Run RAGNAR → CARTOGRAPHER. Source = file path or URL."""
     kg = get_kg()
@@ -81,8 +101,16 @@ def ingest(source: str) -> AgentResult:
     doc_live_id = kg.promote(
         doc_staging,
         f"Document: {raw_doc.metadata.get('filename', raw_doc.source)} ({raw_doc.format})",
+        confirmed=True,  # user uploaded the doc; existence isn't disputed
     )
-    log.info("pipeline_document_promoted", extra={"doc_id": doc_live_id})
+    # 2b. Resolve owner — TUI ingest = admin (CEO). Telegram ingest will pass
+    # uploader_person_id in task later. Ownership-override (Phase 10C) lets the
+    # owner see this doc regardless of tier gating.
+    uploader_id = _resolve_uploader_person_id(kg)
+    if uploader_id:
+        kg.update_live_field(doc_live_id, "owner_id", uploader_id)
+    log.info("pipeline_document_promoted",
+             extra={"doc_id": doc_live_id, "owner_id": uploader_id})
 
     # 2a. 1-2 sentence plain-English summary (stored on Document.fields.summary)
     summary = ""
@@ -93,7 +121,10 @@ def ingest(source: str) -> AgentResult:
     except Exception as e:
         log.warning("summary_failed", extra={"doc_id": doc_live_id, "error": str(e)})
 
-    # 2a.bis SENTINEL — propose tier + doc_kind. Admin confirms later in Browser.
+    # 2a.bis SENTINEL — propose tier + doc_kind. Doc_kind also becomes a hint
+    # passed to CARTOGRAPHER so the extractor can bias toward the right entities
+    # (contract → parties+dates; meeting → people+decisions).
+    sentinel_doc_kind: str | None = None
     try:
         from agents.sentinel import SENTINEL
         sent = SENTINEL.invoke({
@@ -103,6 +134,7 @@ def ingest(source: str) -> AgentResult:
         })
         if sent.success:
             d = sent.data
+            sentinel_doc_kind = d["doc_kind"]
             kg.update_live_field(doc_live_id, "doc_kind", d["doc_kind"])
             kg.update_live_field(doc_live_id, "tier", d["tier"])
             kg.update_live_field(doc_live_id, "tier_reason", d["reason"])
@@ -125,8 +157,12 @@ def ingest(source: str) -> AgentResult:
     except Exception as e:
         log.warning("chunking_failed", extra={"doc_id": doc_live_id, "error": str(e)})
 
-    # 3. CARTOGRAPHER extracts entities
-    cart = CARTOGRAPHER.invoke({"raw_doc": raw_doc, "doc_node_id": doc_live_id})
+    # 3. CARTOGRAPHER extracts entities (with SENTINEL's doc_kind hint)
+    cart = CARTOGRAPHER.invoke({
+        "raw_doc": raw_doc,
+        "doc_node_id": doc_live_id,
+        "doc_kind": sentinel_doc_kind,
+    })
     if not cart.success:
         return cart
 

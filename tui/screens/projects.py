@@ -206,7 +206,7 @@ class ProjectsScreen(Screen):
             doc_id=None,
             promotion_status="auto_eligible",
         )
-        live_id = kg.promote(staging_id, _entity_description("Project", fields))
+        live_id = kg.promote(staging_id, _entity_description("Project", fields), confirmed=True)
 
         # If external + client → auto-create OWNED_BY edge
         if kind == "external" and client_id:

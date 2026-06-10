@@ -30,6 +30,9 @@ CREATE TABLE IF NOT EXISTS schema_meta (
 CREATE TABLE IF NOT EXISTS live_nodes (
     id TEXT PRIMARY KEY,
     company_id TEXT NOT NULL,
+    confirmed INTEGER NOT NULL DEFAULT 0,
+    confirmed_by TEXT,
+    confirmed_at TEXT,
     entity_type TEXT NOT NULL,
     fields_json TEXT NOT NULL,
     created_at TEXT NOT NULL,
@@ -38,6 +41,7 @@ CREATE TABLE IF NOT EXISTS live_nodes (
     confidence REAL NOT NULL DEFAULT 0.0
 );
 CREATE INDEX IF NOT EXISTS idx_live_nodes_company_type ON live_nodes(company_id, entity_type);
+CREATE INDEX IF NOT EXISTS idx_live_nodes_unconfirmed ON live_nodes(company_id, confirmed);
 
 CREATE TABLE IF NOT EXISTS live_edges (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -170,12 +174,37 @@ class GraphStore:
     # ---- Schema ----
     def init_schema(self) -> None:
         with self.conn() as c:
+            # Inline migrations BEFORE DDL — handles columns added in later phases
+            # (Phase 10D: live_nodes.confirmed/confirmed_by/confirmed_at).
+            # `CREATE TABLE IF NOT EXISTS` is a no-op once the table exists, so
+            # new columns in DDL never apply via that path.
+            self._migrate(c)
             c.executescript(DDL)
             c.execute(
                 "INSERT OR REPLACE INTO schema_meta(key, value) VALUES('version', ?)",
                 (str(SCHEMA_VERSION),),
             )
         log.info("schema_initialized", extra={"version": SCHEMA_VERSION, "path": str(self.db_path)})
+
+    def _migrate(self, c: sqlite3.Connection) -> None:
+        """Idempotent column-add migrations. Runs every init."""
+        # Skip if live_nodes doesn't exist yet (fresh DB → DDL will create it).
+        tbl = c.execute(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='live_nodes'"
+        ).fetchone()
+        if not tbl:
+            return
+        existing = {row["name"] for row in c.execute("PRAGMA table_info(live_nodes)").fetchall()}
+        # Phase 10D
+        if "confirmed" not in existing:
+            c.execute("ALTER TABLE live_nodes ADD COLUMN confirmed INTEGER NOT NULL DEFAULT 0")
+            # Backfill: existing rows are admin-created or pre-10D — treat as confirmed.
+            c.execute("UPDATE live_nodes SET confirmed = 1 WHERE confirmed = 0")
+            log.info("migration_added_confirmed", extra={"backfill": "all=1"})
+        if "confirmed_by" not in existing:
+            c.execute("ALTER TABLE live_nodes ADD COLUMN confirmed_by TEXT")
+        if "confirmed_at" not in existing:
+            c.execute("ALTER TABLE live_nodes ADD COLUMN confirmed_at TEXT")
 
     # ---- Live nodes ----
     def insert_live_node(
@@ -216,6 +245,41 @@ class GraphStore:
                     "SELECT * FROM live_nodes WHERE company_id = ?", (company_id,)
                 ).fetchall()
             return [_row_to_node(r) for r in rows]
+
+    def list_unconfirmed_nodes(
+        self, company_id: str, entity_type: str | None = None
+    ) -> list[dict]:
+        with self.conn() as c:
+            if entity_type:
+                rows = c.execute(
+                    """SELECT * FROM live_nodes
+                       WHERE company_id = ? AND confirmed = 0 AND entity_type = ?""",
+                    (company_id, entity_type),
+                ).fetchall()
+            else:
+                rows = c.execute(
+                    "SELECT * FROM live_nodes WHERE company_id = ? AND confirmed = 0",
+                    (company_id,),
+                ).fetchall()
+            return [_row_to_node(r) for r in rows]
+
+    def confirm_node(self, node_id: str, by: str) -> None:
+        now = datetime.now().isoformat()
+        with self.conn() as c:
+            c.execute(
+                """UPDATE live_nodes
+                   SET confirmed = 1, confirmed_by = ?, confirmed_at = ?
+                   WHERE id = ?""",
+                (by, now, node_id),
+            )
+
+    def unconfirmed_count(self, company_id: str) -> int:
+        with self.conn() as c:
+            row = c.execute(
+                "SELECT COUNT(*) AS n FROM live_nodes WHERE company_id = ? AND confirmed = 0",
+                (company_id,),
+            ).fetchone()
+        return int(row["n"]) if row else 0
 
     def bump_verification(self, node_id: str, new_source_count: int, new_confidence: float) -> None:
         now = datetime.now().isoformat()
@@ -520,6 +584,7 @@ class GraphStore:
 
 # ---------------------------------------------------------------------------
 def _row_to_node(row: sqlite3.Row) -> dict:
+    keys = row.keys() if hasattr(row, "keys") else []
     return {
         "id": row["id"],
         "company_id": row["company_id"],
@@ -529,6 +594,9 @@ def _row_to_node(row: sqlite3.Row) -> dict:
         "last_verified_at": row["last_verified_at"],
         "source_count": row["source_count"],
         "confidence": row["confidence"],
+        "confirmed": bool(row["confirmed"]) if "confirmed" in keys else False,
+        "confirmed_by": row["confirmed_by"] if "confirmed_by" in keys else None,
+        "confirmed_at": row["confirmed_at"] if "confirmed_at" in keys else None,
     }
 
 

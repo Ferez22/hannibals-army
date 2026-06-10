@@ -70,7 +70,9 @@ class Oracle(BaseAgent):
 
         # 4) Synthesize answer
         answer = oracle_synth.synthesize(
-            question=question, intent=intent, source_blocks=retrieval["source_blocks"]
+            question=question, intent=intent,
+            source_blocks=retrieval["source_blocks"],
+            has_unconfirmed=retrieval.get("has_unconfirmed", False),
         )
 
         diag = {

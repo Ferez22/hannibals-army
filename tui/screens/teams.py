@@ -252,7 +252,7 @@ class TeamsScreen(Screen):
             doc_id=None,
             promotion_status="auto_eligible",
         )
-        live_id = kg.promote(staging_id, f"Team {kind}: {name}")
+        live_id = kg.promote(staging_id, f"Team {kind}: {name}", confirmed=True)
         if parent_id:
             kg.add_live_edge(from_id=live_id, type="CHILD_OF", to_id=parent_id)
         # Clear inputs

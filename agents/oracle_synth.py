@@ -49,11 +49,18 @@ _INTENT_ADDONS: dict[str, str] = {
 }
 
 
+UNCONFIRMED_BANNER = (
+    "ℹ️ *Some entries below haven't been reviewed by an admin yet — "
+    "the underlying facts may be inaccurate. Confirm them in the Audit screen.*"
+)
+
+
 def synthesize(
     *,
     question: str,
     intent: str,
     source_blocks: list[str],
+    has_unconfirmed: bool = False,
 ) -> str:
     if not source_blocks:
         return (
@@ -77,7 +84,8 @@ SOURCES:
 ANSWER:"""
 
     model = _model_for_intent(intent)
-    log.info("synth", extra={"intent": intent, "model": model, "blocks": len(source_blocks)})
+    log.info("synth", extra={"intent": intent, "model": model, "blocks": len(source_blocks),
+                              "has_unconfirmed": has_unconfirmed})
     answer = llm.generate(model=model, prompt=prompt, temperature=0.0, max_tokens=400)
     if not answer:
         # Fallback to local if cloud failed
@@ -85,7 +93,10 @@ ANSWER:"""
             log.warning("synth_cloud_failed_fallback_local")
             answer = llm.generate(model=config.MASTER_MODEL, prompt=prompt,
                                   temperature=0.0, max_tokens=400)
-    return answer or "I don't have enough in the knowledge graph to answer that confidently."
+    final = answer or "I don't have enough in the knowledge graph to answer that confidently."
+    if has_unconfirmed and answer:
+        final = f"{UNCONFIRMED_BANNER}\n\n{final}"
+    return final
 
 
 def _model_for_intent(intent: str) -> str:

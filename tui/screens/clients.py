@@ -179,7 +179,7 @@ class ClientsScreen(Screen):
             doc_id=None,
             promotion_status="auto_eligible",
         )
-        live_id = kg.promote(staging_id, _entity_description("Client", fields))
+        live_id = kg.promote(staging_id, _entity_description("Client", fields), confirmed=True)
 
         # Clear inputs
         for wid in ("#cl-name", "#cl-industry", "#cl-domicile", "#cl-email", "#cl-notes"):

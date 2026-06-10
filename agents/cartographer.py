@@ -15,12 +15,15 @@ log = logging.getLogger("hannibal.cartographer")
 
 
 # Map extractor output keys → entity type names.
-# NOTE: Client AND Project are intentionally NOT here. High-stakes / money-touching;
-# the user creates them manually via Clients / Projects screens. Extractor focuses
-# on what small models do well: name extraction (Person/Team/Rule/Event).
+# Phase 10E: re-enabled Client + Project auto-extraction. Auto-promote +
+# `confirmed=False` + ORACLE unconfirmed banner replace the old manual gate.
+# Manual creation via Clients/Projects screens still supported (those paths
+# call `kg.promote(..., confirmed=True)`).
 _TYPE_MAP = {
     "persons":  "Person",
     "teams":    "Team",
+    "clients":  "Client",
+    "projects": "Project",
     "rules":    "Rule",
     "events":   "Event",
 }
@@ -100,9 +103,11 @@ class Cartographer(BaseAgent):
         super().__init__(kg=kg)
 
     def invoke(self, task: dict[str, Any]) -> AgentResult:
-        """task: {"raw_doc": RawDocument, "doc_node_id": <live Document id>}"""
+        """task: {"raw_doc": RawDocument, "doc_node_id": <live Document id>,
+                  "doc_kind": <SENTINEL's classification, optional>}"""
         raw_doc: RawDocument | None = task.get("raw_doc")
         doc_node_id: str | None = task.get("doc_node_id")
+        doc_kind: str | None = task.get("doc_kind")
         if not raw_doc:
             return AgentResult(False, error="missing 'raw_doc'")
         if self.kg is None:
@@ -110,10 +115,20 @@ class Cartographer(BaseAgent):
 
         log.info(
             "cartographer_start",
-            extra={"source": raw_doc.source, "chars": len(raw_doc.raw_text)},
+            extra={"source": raw_doc.source, "chars": len(raw_doc.raw_text),
+                   "doc_kind": doc_kind},
         )
 
-        extraction = extractor.extract(raw_doc.raw_text)
+        # Self-company + domain feed the extractor's Client/Person.kind heuristics
+        company_cfg = (config.COMPANY or {}).get("identity", {}) or {}
+        self_company = company_cfg.get("name")
+        self_domain = company_cfg.get("domain") or company_cfg.get("website")
+        extraction = extractor.extract(
+            raw_doc.raw_text,
+            doc_kind=doc_kind,
+            self_company=self_company,
+            self_domain=self_domain,
+        )
         log.info(
             "extraction_done",
             extra={k: len(v) for k, v in extraction.items()},
@@ -196,48 +211,38 @@ class Cartographer(BaseAgent):
                     )
                     continue
 
-                # 3) New — apply promotion gate
+                # 3) New — auto-promote unconfirmed (Phase 10D).
+                # Gate removed: ORACLE warns on unconfirmed; CEO can confirm/reject
+                # in Audit screen. The old `promotion.should_auto_promote` is kept
+                # as `blocked_reason` metadata for audit triage but no longer blocks
+                # promotion.
                 fields = _to_storage_fields(entity_type, item)
-                auto, reason = promotion.should_auto_promote(
+                _, gate_reason = promotion.should_auto_promote(
                     entity_type,
                     fields,
                     company_seeded_names=seeded_teams,
                 )
-
-                if auto:
-                    staging_id = self.kg.stage_entity(
-                        entity_type=entity_type,
-                        fields=fields,
-                        doc_id=doc_node_id,
-                        promotion_status="auto_eligible",
-                    )
-                    live_id = self.kg.promote(staging_id, _entity_description(entity_type, fields))
-                    promoted_ids[entity_type].append(live_id)
-                    # Add to live list so subsequent items in same batch dedup against it
-                    existing_live.append(self.kg.get_live(live_id))
-                    log.info(
-                        "auto_promoted",
-                        extra={"entity_type": entity_type, "live_id": live_id},
-                    )
-                else:
-                    staging_id = self.kg.stage_entity(
-                        entity_type=entity_type,
-                        fields=fields,
-                        doc_id=doc_node_id,
-                        promotion_status="pending",
-                        blocked_reason=reason,
-                    )
-                    staged_ids[entity_type].append(staging_id)
-                    # Add to pending list so subsequent items in same batch dedup against it
-                    pending_for_type.append({
-                        "id": staging_id,
-                        "entity_type": entity_type,
-                        "fields": fields,
-                    })
-                    log.info(
-                        "staged_pending",
-                        extra={"entity_type": entity_type, "reason": reason},
-                    )
+                if gate_reason:
+                    fields["audit_hint"] = gate_reason
+                staging_id = self.kg.stage_entity(
+                    entity_type=entity_type,
+                    fields=fields,
+                    doc_id=doc_node_id,
+                    promotion_status="auto_eligible",
+                    blocked_reason=gate_reason,
+                )
+                live_id = self.kg.promote(
+                    staging_id,
+                    _entity_description(entity_type, fields),
+                    confirmed=False,
+                )
+                promoted_ids[entity_type].append(live_id)
+                existing_live.append(self.kg.get_live(live_id))
+                log.info(
+                    "auto_promoted_unconfirmed",
+                    extra={"entity_type": entity_type, "live_id": live_id,
+                           "audit_hint": gate_reason},
+                )
 
         # Edges — only between promoted/existing live nodes
         edges_added = 0
@@ -252,6 +257,31 @@ class Cartographer(BaseAgent):
                     from_id=from_id, type=edge["type"], to_id=to_id, properties=props
                 )
                 edges_added += 1
+                # Edge ↔ field sync (design decision #8)
+                _sync_edge_to_fields(self.kg, edge["type"], from_id, to_id)
+
+        # Fallback: Project.client_name_hint → OWNED_BY edge if LLM forgot to emit it
+        for project_id in promoted_ids.get("Project", []):
+            proj = self.kg.get_live(project_id)
+            if not proj:
+                continue
+            hint = (proj["fields"].get("client_name_hint") or "").strip()
+            if not hint or proj["fields"].get("client_id"):
+                continue
+            client_id = _resolve_node_by_name(self.kg, hint, entity_type="Client")
+            if not client_id:
+                continue
+            # Check OWNED_BY edge doesn't already exist
+            existing = self.kg.graph.find_edges(self.kg.company_id, project_id, "OWNED_BY", client_id)
+            if existing:
+                continue
+            self.kg.add_live_edge(
+                from_id=project_id, type="OWNED_BY", to_id=client_id, properties=None
+            )
+            edges_added += 1
+            _sync_edge_to_fields(self.kg, "OWNED_BY", project_id, client_id)
+            log.info("owned_by_backfilled_from_hint",
+                     extra={"project_id": project_id, "client_id": client_id, "hint": hint})
 
         # Sync YAML mirror if anything changed
         any_change = (
@@ -286,13 +316,19 @@ def _to_storage_fields(entity_type: str, item: dict[str, Any]) -> dict[str, Any]
         emails = [e.strip() for e in (item.get("emails") or []) if isinstance(e, str) and e.strip()]
         if email and email not in emails:
             emails.append(email)
+        kind_raw = (item.get("kind") or "unknown").strip().lower()
+        kind = kind_raw if kind_raw in ("employee", "external", "unknown") else "unknown"
+        external_company = (item.get("external_company") or "").strip() or None
+        # External w/o company → downgrade to unknown so Audit screen prompts for it
+        if kind == "external" and not external_company:
+            kind = "unknown"
         return {
             "name": item.get("name", "").strip(),
-            "kind": "unknown",                    # default; user classifies in Pending
+            "kind": kind,
             "emails": emails,
             "role": (item.get("role") or "").strip() or None,
             "sub_roles": [],
-            "external_company": None,
+            "external_company": external_company,
             "photo_path": None,
         }
     if entity_type == "Team":
@@ -307,12 +343,15 @@ def _to_storage_fields(entity_type: str, item: dict[str, Any]) -> dict[str, Any]
     if entity_type == "Project":
         kind_raw = (item.get("kind") or "internal").strip().lower()
         kind = kind_raw if kind_raw in ("internal", "external") else "internal"
+        # client_name from extractor — resolved to client_id in edge pass (OWNED_BY).
+        # Stored on fields for Audit screen visibility; promoted edges set the canonical client_id.
         return {
             "name": item.get("name", "").strip(),
             "kind": kind,
             "lead": (item.get("lead") or "").strip() or None,
             "status": (item.get("status") or "").strip() or None,
             "client_id": (item.get("client_id") or "").strip() or None,
+            "client_name_hint": (item.get("client_name") or "").strip() or None,
         }
     if entity_type == "Client":
         return {
@@ -337,12 +376,50 @@ def _to_storage_fields(entity_type: str, item: dict[str, Any]) -> dict[str, Any]
     return dict(item)
 
 
-def _resolve_node_by_name(kg: KnowledgeGraph, name: str | None) -> str | None:
-    """Find live node id by name match across all types. Used for edges."""
+def _sync_edge_to_fields(
+    kg: KnowledgeGraph, edge_type: str, from_id: str, to_id: str,
+) -> None:
+    """Mirror certain edges back into entity fields so downstream readers
+    (Clients screen, yaml_sync, ORACLE) work without traversing edges.
+
+    Matches the pattern in `tui/screens/edges.py:create_edge` for manual
+    creation. See CLAUDE.md design decision #8.
+    """
+    if edge_type == "OWNED_BY":
+        # Project → Client: set Project.client_id + flip kind to external
+        project = kg.get_live(from_id)
+        client = kg.get_live(to_id)
+        if not project or not client:
+            return
+        if project["entity_type"] != "Project" or client["entity_type"] != "Client":
+            return
+        kg.update_live_field(from_id, "client_id", to_id)
+        if project["fields"].get("kind") != "external":
+            kg.update_live_field(from_id, "kind", "external")
+    elif edge_type == "BELONGS_TO_CLIENT":
+        # External Person → Client: set Person.external_company to client.name
+        person = kg.get_live(from_id)
+        client = kg.get_live(to_id)
+        if not person or not client:
+            return
+        if person["entity_type"] != "Person" or client["entity_type"] != "Client":
+            return
+        client_name = client["fields"].get("name")
+        if client_name and person["fields"].get("external_company") != client_name:
+            kg.update_live_field(from_id, "external_company", client_name)
+            if person["fields"].get("kind") != "external":
+                kg.update_live_field(from_id, "kind", "external")
+
+
+def _resolve_node_by_name(
+    kg: KnowledgeGraph, name: str | None, entity_type: str | None = None,
+) -> str | None:
+    """Find live node id by name match. Used for edges. Optional entity_type
+    narrows the search (e.g. resolve to Client only for OWNED_BY targets)."""
     if not name:
         return None
     name_tokens = dedup.normalize_tokens(name)
-    for node in kg.list_live():
+    for node in kg.list_live(entity_type):
         node_name = node["fields"].get("name") or node["fields"].get("title")
         if dedup.tokens_match(name_tokens, dedup.normalize_tokens(node_name)):
             return node["id"]
