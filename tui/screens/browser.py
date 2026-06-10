@@ -29,6 +29,17 @@ def _resolve_person_label(person_id: str | None) -> str:
     return f"{node['fields'].get('name', '?')}  [dim]{person_id}[/]"
 
 
+def _resolve_node_label(node_id: str) -> str:
+    """Render `Name [id-prefix]` for any live node; raw id when unresolved.
+    Used in edge listing so neighbors show their human name."""
+    node = get_kg().get_live(node_id)
+    if not node:
+        return f"[dim]{node_id}[/]"
+    f = node["fields"]
+    name = f.get("name") or f.get("title") or "(unnamed)"
+    return f"{name} [dim]({node_id[:16]})[/]"
+
+
 class BrowserScreen(Screen):
     BINDINGS = [
         ("left",  "prev_type", "Prev type"),
@@ -125,27 +136,29 @@ class BrowserScreen(Screen):
         if not node:
             banner.update("[red]no row selected[/]")
             return
-        if node["entity_type"] != "Document":
-            banner.update("[red]Confirm tier only for Document rows[/]")
+        if node["entity_type"] not in ("Document", "Person"):
+            banner.update("[red]Tier confirm only for Document or Person rows[/]")
             return
         tier_sel = self.query_one("#b-tier", Select).value
         if not isinstance(tier_sel, str) or tier_sel not in config.TIERS:
             banner.update("[red]pick a tier first[/]")
             return
-        sentinel_tier = node["fields"].get("tier")
-        # Disagreement → prompt for reason
-        if sentinel_tier and tier_sel != sentinel_tier:
-            self._pending_override = (node["id"], tier_sel)
-            reason_input = self.query_one("#b-tier-reason", Input)
-            reason_input.remove_class("hidden")
-            reason_input.value = ""
-            reason_input.focus()
-            banner.update(
-                f"[#F5D020]Override:[/] SENTINEL → {sentinel_tier}, you → {tier_sel}. "
-                "Type one-line reason and press Enter."
-            )
-            return
-        # Silent agreement
+        # Override-reason flow only applies to Documents (SENTINEL proposes for those).
+        # Person tier comes from directory or extractor — no SENTINEL → no override capture.
+        if node["entity_type"] == "Document":
+            sentinel_tier = node["fields"].get("tier")
+            if sentinel_tier and tier_sel != sentinel_tier:
+                self._pending_override = (node["id"], tier_sel)
+                reason_input = self.query_one("#b-tier-reason", Input)
+                reason_input.remove_class("hidden")
+                reason_input.value = ""
+                reason_input.focus()
+                banner.update(
+                    f"[#F5D020]Override:[/] SENTINEL → {sentinel_tier}, you → {tier_sel}. "
+                    "Type one-line reason and press Enter."
+                )
+                return
+        # Silent agreement (Documents w/ matching tier) or Person (no SENTINEL).
         self._apply_tier_confirmation(node, tier_sel, ceo_reason=None)
 
     @on(Input.Submitted, "#b-tier-reason")
@@ -155,8 +168,7 @@ class BrowserScreen(Screen):
         if not pending:
             return
         node_id, tier_sel = pending
-        nodes = get_kg().list_live("Document")
-        node = next((n for n in nodes if n["id"] == node_id), None)
+        node = get_kg().get_live(node_id)
         if not node:
             self.query_one("#b-banner", Static).update("[red]row no longer exists[/]")
             self._pending_override = None
@@ -175,27 +187,34 @@ class BrowserScreen(Screen):
     def _apply_tier_confirmation(
         self, node: dict, tier_sel: str, *, ceo_reason: str | None,
     ) -> None:
-        from capabilities import tier_memory
-
         kg = get_kg()
-        now = datetime.now().isoformat()
         admin = config.TELEGRAM_ADMIN_CHAT_ID or "tui-admin"
         kg.update_live_field(node["id"], "tier", tier_sel)
+
+        if node["entity_type"] == "Person":
+            kg.update_live_field(node["id"], "tier_confirmed", True)
+            self.query_one("#b-banner", Static).update(
+                f"[#2ECC71]Person tier confirmed[/] {tier_sel} on {node['id']}"
+            )
+            self.refresh_type()
+            return
+
+        # Document path: write audit fields + record SENTINEL correction
+        from capabilities import tier_memory
+        now = datetime.now().isoformat()
         kg.update_live_field(node["id"], "tier_confirmed_by", admin)
         kg.update_live_field(node["id"], "tier_confirmed_at", now)
 
         # Record into tier_corrections for SENTINEL learning loop
         f = node["fields"]
+        original_sentinel_tier = f.get("tier")
         sentinel_snapshot = {
             "doc_kind": f.get("doc_kind"),
-            "tier": f.get("tier") if not ceo_reason else None,  # NB: tier was already overwritten above
+            "tier": original_sentinel_tier,
             "reason": f.get("tier_reason"),
             "source": None,
         }
-        # Re-fetch original SENTINEL tier from the in-memory copy (node was captured before update)
-        original_sentinel_tier = node["fields"].get("tier")
-        sentinel_snapshot["tier"] = original_sentinel_tier
-        # doc_text source: we don't have raw text on hand; use title + summary as proxy
+        # Proxy doc text since raw isn't on hand here
         proxy_text = f.get("summary") or f.get("title") or ""
         try:
             tier_memory.record_correction(
@@ -316,7 +335,7 @@ class BrowserScreen(Screen):
             lines.append("[bold #F5A623]edges[/]")
             for e in edges:
                 direction = "→" if e["from_id"] == node["id"] else "←"
-                other = e["to_id"] if e["from_id"] == node["id"] else e["from_id"]
+                other_id = e["to_id"] if e["from_id"] == node["id"] else e["from_id"]
                 role = f" ({e['properties'].get('role')})" if e["properties"].get("role") else ""
-                lines.append(f"  {direction} {e['type']}{role}  {other}")
+                lines.append(f"  {direction} {e['type']}{role}  {_resolve_node_label(other_id)}")
         self.query_one("#b-detail", Static).update("\n".join(lines))

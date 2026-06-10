@@ -116,6 +116,43 @@ def tier_rank(label: str | None) -> int:
     return TIER_RANKS.get(label, TIER_RANKS[DEFAULT_PERSON_TIER])
 
 
+# Phase 11A — Directory import: map job-title patterns → tier.
+# Each pattern is a whole-word regex (case-insensitive). First match wins, so
+# order matters: more-specific titles must precede generic ones (e.g. "Director
+# of Sales" must hit `director`, not get swallowed by `cto` inside "dire-CTO-r").
+# CEO can override per-person in the Audit screen.
+TIER_TITLE_RULES: tuple[tuple[str, str], ...] = (
+    (r"\bceo\b",            "ceo"),
+    (r"\bfounder\b",        "ceo"),
+    (r"\bdirector\b",       "director"),  # before c-level so "Director" wins over CXO-like 3-letter regex
+    (r"\bhead\s+of\b",      "director"),
+    (r"\bvice\s+president\b", "c_level"),
+    (r"\bvp\b",             "c_level"),
+    (r"\bpresident\b",      "c_level"),
+    (r"\bchief\b",          "c_level"),
+    (r"\bcto\b",            "c_level"),
+    (r"\bcfo\b",            "c_level"),
+    (r"\bcoo\b",            "c_level"),
+    (r"\bcmo\b",            "c_level"),
+    (r"\bcpo\b",            "c_level"),
+    (r"\bcio\b",            "c_level"),
+    (r"\bmanager\b",        "manager"),
+    (r"\blead\b",           "manager"),
+)
+
+
+def tier_from_title(title: str | None) -> str:
+    """Return best-matching tier label for a job title; defaults to DEFAULT_PERSON_TIER."""
+    if not title:
+        return DEFAULT_PERSON_TIER
+    import re
+    t = title.lower()
+    for pattern, tier in TIER_TITLE_RULES:
+        if re.search(pattern, t):
+            return tier
+    return DEFAULT_PERSON_TIER
+
+
 # ---------------------------------------------------------------------------
 # Staging + Promotion
 # ---------------------------------------------------------------------------
