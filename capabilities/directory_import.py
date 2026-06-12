@@ -80,6 +80,18 @@ def import_directory(kg: KnowledgeGraph, entries: list[DirectoryEntry]) -> Impor
         "n_skipped": result.skipped, "n_manager_edges": result.manager_edges_added,
         "n_errors": len(result.errors),
     })
+
+    # Phase 12 — refresh personas for every touched Person so the bot picks up
+    # new titles/tiers immediately. Failures are non-fatal: persona will catch
+    # up on next chat or daily DONNA scan.
+    try:
+        from agents.scribe import SCRIBE
+        SCRIBE.kg = kg
+        for pid in email_to_id.values():
+            SCRIBE.invoke({"action": "build", "person_id": pid})
+    except Exception as e:
+        log.warning("scribe_post_import_failed", extra={"error": str(e)})
+
     return result
 
 

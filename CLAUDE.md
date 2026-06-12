@@ -38,6 +38,7 @@ docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md, graph-d
 | CARTOGRAPHER | LLM extraction → staging → dedup → promotion → writes live KG + YAML mirror |
 | ORACLE | Intent router → per-intent retriever → synthesizer. Intents: `person`, `project`, `team`, `client`, `summary`, `config_edit`, `generic`. Lexical patterns in `oracle_intent.py:LEXICAL_PATTERNS` fast-path; LLM classifier fallback. Synthesis auto-switches to OpenAI when `OPENAI_API_KEY` set, else local Ollama. |
 | SENTINEL | Tier classifier (Phase 10B). Runs post-extraction in `core/ingestion_pipeline.py`. Two-stage: rule signals first (`capabilities/tier_classify.py:RULE_SIGNALS`), LLM fallback on miss. Writes `doc_kind`, `tier`, `tier_reason` to live Document. `tier_confirmed_*` stays empty until admin confirms in Browser. |
+| SCRIBE | Persona curator (Phase 12). Maintains `memory/persona/<person_id>.yml` per Person — identity, projects worked on, close colleagues, recent decisions. Derived from KG edges, scoped to person's tier. Triggered on doc ingest (refresh_for_doc), directory import, manual `/refresh_persona`, and DONNA daily scan. Preserves user-curated fields (style/notes/preferences) on rebuild. |
 | DONNA | Validator — staleness scan, conflict detection, rule notifications (TUI + Telegram), auto-scan on startup if last > 24h |
 
 ## Key design decisions (DO NOT change without discussion)
@@ -79,6 +80,14 @@ docs/           # ARMY_PLAN, ROADMAP, EXTRACTION_BASELINE, PHASE_*_*.md, graph-d
 35. **Ownership-override on retrieval (Phase 10C)** — `owner_id` field on `Document` + `Project`. `capabilities/retriever.py:_tier_filter` keeps a chunk when `doc.owner_id == sender_person_id`, regardless of tier rank. Document.owner_id is set automatically at ingest by `_resolve_uploader_person_id` in `core/ingestion_pipeline.py` (admin chat_id → Person; falls back to first CEO/founder by role). Project.owner_id is currently set only via direct field edits (UI picker deferred).
 36. **Directory import adapter (Phase 11A)** — `capabilities/directory_adapter.py` reads CSV / JSON org-chart files into `DirectoryEntry` rows. `capabilities/directory_import.py:import_directory` upserts each row as a live `Person` (dedup by email, case-insensitive), patching tier + title + department on matches. Tier comes from `config.tier_from_title()` (whole-word regex against `TIER_TITLE_RULES`; explicit `tier` column overrides). Pass 2 wires `MEMBER_OF` edges with `role='direct_report'` from `manager_email`. CLI: `scripts/import_directory.py path.csv [--dry-run]`. Phase 11B will swap the adapter for a real Google Workspace Directory API client behind the same `DirectoryEntry` shape.
 37. **Directory imports set `tier_confirmed=True`** — CEO opted to point the adapter at this data, so the tier on import is treated as authoritative (no UNCONFIRMED_BANNER for tier). `Person.confirmed` stays `False` so the Audit screen still surfaces the new Persons for role/department review.
+38. **Conversation memory (Phase 12)** — `conversations` + `conversation_messages` SQLite tables. Per `(chat_id, channel)` with 6h idle timeout. `KnowledgeGraph.get_or_create_conversation` / `recent_messages` / `reset_conversation` / `append_conversation_message`. ORACLE accepts `conversation_id` in task dict; pulls last 6 turns and injects into synth prompt as `CONVERSATION CONTEXT` block (oldest → newest). Per-msg cap = 500 chars to keep prompt bounded.
+39. **Clarification short-circuit skipped when conv context exists** — `agents/oracle.py` lets follow-ups like "her email?" reach the synth (which has prior turns) instead of asking the user to repeat. Without recent_turns, clarification still fires as before.
+40. **Synth answers from PERSONA + CONVERSATION even when retrieval is empty** — `oracle_synth.synthesize` bails out with the "nothing in graph" message ONLY when all three (source_blocks, persona_block, conv_block) are empty. Otherwise it lets the LLM answer using context alone.
+41. **Persona files at `memory/persona/<person_id>.yml`** (gitignored). Atomic write: write to `.tmp` then `os.replace()`. `capabilities/persona_store.py` owns IO; SCRIBE owns content. Section caps (`SECTION_CAPS`) keep injected prompt size bounded. `_meta.last_updated_at` + `_meta.updated_by` audit every write. `communication_style` / `preferences` / `notes` are preserved on SCRIBE rebuilds — those are user-curated.
+42. **Persona injected only for sender** — `agents/oracle.py` calls `persona_store.load_persona(sender_person_id)`. Other people's personas never enter ORACLE prompts. Privacy-by-default.
+43. **SCRIBE triggers** — (a) `refresh_for_doc` invoked from `core/ingestion_pipeline.py` after CARTOGRAPHER, rebuilds personas of Persons connected to the new Document. (b) `build` per Person after `directory_import.import_directory`. (c) `rebuild_all` piggybacked on DONNA's `_scan_all` for eventual consistency. (d) `/refresh_persona` Telegram command for manual force.
+44. **TUI Query screen uses chat_id = `"tui-admin-session"`** — single persistent conversation tied to whichever Person resolves as uploader (`_resolve_uploader_person_id`). Reset button calls `kg.reset_conversation`. Banner shows persona load state (🪶 loaded / no persona yet).
+45. **Tests (`tests/`)** — first automated suite in the repo. Run with `.venv/bin/python -m unittest discover tests`. Currently covers conversation facade + persona store. New phases adding stateful behavior should add tests here.
 
 ## Running
 
@@ -121,7 +130,7 @@ Adopt alembic when KG holds data we cannot rebuild from source files (Phase 12+)
 
 ## Testing
 
-Manual TUI smoke tests + per-module Python `-c` checks. No automated test suite yet. Spike script `scripts/extraction_spike.py` measures extraction quality on `data/samples/`.
+Manual TUI smoke tests + per-module Python `-c` checks + unittest suite under `tests/` (Phase 12 onwards). Run automated tests with `.venv/bin/python -m unittest discover tests`. Tests use a temporary DB so they don't pollute `db/graph.db`. Spike script `scripts/extraction_spike.py` measures extraction quality on `data/samples/`.
 
 ## What's done vs. coming
 

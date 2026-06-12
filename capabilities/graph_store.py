@@ -147,6 +147,35 @@ CREATE TABLE IF NOT EXISTS tier_corrections (
 );
 CREATE INDEX IF NOT EXISTS idx_tier_corr_company ON tier_corrections(company_id);
 CREATE INDEX IF NOT EXISTS idx_tier_corr_override ON tier_corrections(company_id, is_override);
+
+CREATE TABLE IF NOT EXISTS conversations (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    company_id TEXT NOT NULL,
+    person_id TEXT,         -- nullable when sender unresolved
+    chat_id TEXT,           -- Telegram chat_id (str) or tui-session key
+    channel TEXT NOT NULL,  -- 'telegram' | 'tui'
+    created_at TEXT NOT NULL,
+    last_active_at TEXT NOT NULL,
+    active INTEGER NOT NULL DEFAULT 1
+);
+CREATE INDEX IF NOT EXISTS idx_conv_company_chat
+    ON conversations(company_id, chat_id, active);
+CREATE INDEX IF NOT EXISTS idx_conv_company_person
+    ON conversations(company_id, person_id, active);
+
+CREATE TABLE IF NOT EXISTS conversation_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    conversation_id INTEGER NOT NULL,
+    ordinal INTEGER NOT NULL,
+    role TEXT NOT NULL,          -- 'user' | 'assistant'
+    content TEXT NOT NULL,
+    intent TEXT,
+    cited_ids_json TEXT,
+    created_at TEXT NOT NULL,
+    FOREIGN KEY (conversation_id) REFERENCES conversations(id) ON DELETE CASCADE
+);
+CREATE INDEX IF NOT EXISTS idx_conv_msg_conv
+    ON conversation_messages(conversation_id, ordinal);
 """
 
 
@@ -581,6 +610,97 @@ class GraphStore:
             )
             return cur.lastrowid
 
+    # ---- Conversations (Phase 12) ----
+    def get_active_conversation(
+        self, *, company_id: str, chat_id: str, channel: str, idle_timeout_hours: float = 6.0,
+    ) -> dict | None:
+        """Return the active conversation row for `(company_id, chat_id, channel)` if
+        it's been touched within `idle_timeout_hours`. Otherwise None."""
+        from datetime import timedelta
+        cutoff = (datetime.now() - timedelta(hours=idle_timeout_hours)).isoformat()
+        with self.conn() as c:
+            row = c.execute(
+                """SELECT * FROM conversations
+                   WHERE company_id = ? AND chat_id = ? AND channel = ? AND active = 1
+                     AND last_active_at >= ?
+                   ORDER BY id DESC LIMIT 1""",
+                (company_id, chat_id, channel, cutoff),
+            ).fetchone()
+        return _row_to_conversation(row) if row else None
+
+    def start_conversation(
+        self, *, company_id: str, person_id: str | None, chat_id: str, channel: str,
+    ) -> int:
+        """Always opens a new active conversation. Caller should deactivate any
+        previous active conv first if it wants a hard reset."""
+        now = datetime.now().isoformat()
+        with self.conn() as c:
+            cur = c.execute(
+                """INSERT INTO conversations
+                   (company_id, person_id, chat_id, channel, created_at, last_active_at, active)
+                   VALUES (?, ?, ?, ?, ?, ?, 1)""",
+                (company_id, person_id, chat_id, channel, now, now),
+            )
+            return cur.lastrowid
+
+    def deactivate_conversations(
+        self, *, company_id: str, chat_id: str, channel: str,
+    ) -> int:
+        """Mark all active conversations on this chat as inactive. Returns count."""
+        with self.conn() as c:
+            cur = c.execute(
+                """UPDATE conversations SET active = 0
+                   WHERE company_id = ? AND chat_id = ? AND channel = ? AND active = 1""",
+                (company_id, chat_id, channel),
+            )
+            return cur.rowcount
+
+    def touch_conversation(self, conversation_id: int) -> None:
+        now = datetime.now().isoformat()
+        with self.conn() as c:
+            c.execute(
+                "UPDATE conversations SET last_active_at = ? WHERE id = ?",
+                (now, conversation_id),
+            )
+
+    def append_message(
+        self, *, conversation_id: int, role: str, content: str,
+        intent: str | None = None, cited_ids: list[str] | None = None,
+    ) -> int:
+        now = datetime.now().isoformat()
+        with self.conn() as c:
+            row = c.execute(
+                "SELECT COALESCE(MAX(ordinal), -1) + 1 AS next FROM conversation_messages WHERE conversation_id = ?",
+                (conversation_id,),
+            ).fetchone()
+            ordinal = int(row["next"])
+            cur = c.execute(
+                """INSERT INTO conversation_messages
+                   (conversation_id, ordinal, role, content, intent, cited_ids_json, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?, ?)""",
+                (conversation_id, ordinal, role, content, intent,
+                 json.dumps(cited_ids) if cited_ids else None, now),
+            )
+            # Also bump conversation last_active_at
+            c.execute(
+                "UPDATE conversations SET last_active_at = ? WHERE id = ?",
+                (now, conversation_id),
+            )
+            return cur.lastrowid
+
+    def list_recent_messages(
+        self, *, conversation_id: int, limit: int = 6,
+    ) -> list[dict]:
+        """Return last N messages in chronological order (oldest → newest)."""
+        with self.conn() as c:
+            rows = c.execute(
+                """SELECT * FROM conversation_messages
+                   WHERE conversation_id = ?
+                   ORDER BY ordinal DESC LIMIT ?""",
+                (conversation_id, limit),
+            ).fetchall()
+        return [_row_to_message(r) for r in reversed(rows)]
+
 
 # ---------------------------------------------------------------------------
 def _row_to_node(row: sqlite3.Row) -> dict:
@@ -597,6 +717,32 @@ def _row_to_node(row: sqlite3.Row) -> dict:
         "confirmed": bool(row["confirmed"]) if "confirmed" in keys else False,
         "confirmed_by": row["confirmed_by"] if "confirmed_by" in keys else None,
         "confirmed_at": row["confirmed_at"] if "confirmed_at" in keys else None,
+    }
+
+
+def _row_to_conversation(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "company_id": row["company_id"],
+        "person_id": row["person_id"],
+        "chat_id": row["chat_id"],
+        "channel": row["channel"],
+        "created_at": row["created_at"],
+        "last_active_at": row["last_active_at"],
+        "active": bool(row["active"]),
+    }
+
+
+def _row_to_message(row: sqlite3.Row) -> dict:
+    return {
+        "id": row["id"],
+        "conversation_id": row["conversation_id"],
+        "ordinal": row["ordinal"],
+        "role": row["role"],
+        "content": row["content"],
+        "intent": row["intent"],
+        "cited_ids": json.loads(row["cited_ids_json"]) if row["cited_ids_json"] else [],
+        "created_at": row["created_at"],
     }
 
 

@@ -166,6 +166,17 @@ def ingest(source: str) -> AgentResult:
     if not cart.success:
         return cart
 
+    # 3a. SCRIBE — refresh personas of Persons connected to this Document.
+    # Doc-mention is the strongest "your context changed" signal; rebuild
+    # affected cards now so next chat reflects fresh facts.
+    try:
+        from agents.scribe import SCRIBE
+        SCRIBE.kg = kg
+        SCRIBE.invoke({"action": "refresh_for_doc", "doc_id": doc_live_id})
+    except Exception as e:
+        log.warning("scribe_refresh_failed",
+                    extra={"doc_id": doc_live_id, "error": str(e)})
+
     # 4. Refresh status (pending count may have grown)
     _refresh_status(kg)
 

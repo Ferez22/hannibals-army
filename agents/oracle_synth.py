@@ -54,6 +54,28 @@ UNCONFIRMED_BANNER = (
     "the underlying facts may be inaccurate. Confirm them in the Audit screen.*"
 )
 
+# Character cap per injected prior message to keep prompt bounded
+RECENT_MSG_CHAR_CAP = 500
+
+
+def _render_conversation_context(recent_turns: list[dict] | None) -> str:
+    """Format prior messages as a CONVERSATION CONTEXT block.
+
+    Each msg: dict with 'role' ('user'|'assistant') + 'content'. Older first,
+    newest last. Returns '' when no turns to render."""
+    if not recent_turns:
+        return ""
+    lines = ["CONVERSATION CONTEXT (oldest → newest, use to resolve follow-ups):"]
+    for msg in recent_turns:
+        role = msg.get("role", "?")
+        content = (msg.get("content") or "").strip()
+        if not content:
+            continue
+        if len(content) > RECENT_MSG_CHAR_CAP:
+            content = content[:RECENT_MSG_CHAR_CAP] + "…"
+        lines.append(f"  {role}: {content}")
+    return "\n".join(lines) if len(lines) > 1 else ""
+
 
 def synthesize(
     *,
@@ -61,20 +83,30 @@ def synthesize(
     intent: str,
     source_blocks: list[str],
     has_unconfirmed: bool = False,
+    persona_block: str = "",
+    recent_turns: list[dict] | None = None,
 ) -> str:
-    if not source_blocks:
+    conv_block = _render_conversation_context(recent_turns)
+    persona_section = f"\n{persona_block}\n" if persona_block else ""
+    conv_section = f"\n{conv_block}\n" if conv_block else ""
+
+    # Phase 12: synth may still answer using PERSONA + CONVERSATION CONTEXT
+    # even when retrieval is empty (e.g. follow-up "her email?" referring to
+    # someone from a prior turn). Only bail out when nothing at all is in scope.
+    if not source_blocks and not persona_block and not conv_block:
         return (
             "I don't have anything in the knowledge graph related to that yet. "
             "Try ingesting more docs, or check what's there in the Browser screen."
         )
 
     addon = _INTENT_ADDONS.get(intent, "")
-    sources = "\n\n".join(source_blocks)
+    sources = "\n\n".join(source_blocks) if source_blocks else "(no fresh sources for this question — rely on context above)"
+
     prompt = f"""{_SYSTEM}
 
 INTENT: {intent}
 {addon}
-
+{persona_section}{conv_section}
 QUESTION:
 {question}
 

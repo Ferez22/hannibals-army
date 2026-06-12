@@ -288,6 +288,19 @@ class Donna(BaseAgent):
         except Exception as e:
             log.warning("digest_send_failed", extra={"error": str(e)})
 
+        # Phase 12: piggyback SCRIBE persona refresh on the daily scan.
+        # Eventual consistency for any persona that fell out of date between
+        # extractor + directory triggers.
+        personas_built = 0
+        try:
+            from agents.scribe import SCRIBE
+            SCRIBE.kg = self.kg
+            scribe_res = SCRIBE.invoke({"action": "rebuild_all"})
+            if scribe_res.success:
+                personas_built = scribe_res.data.get("built", 0)
+        except Exception as e:
+            log.warning("scribe_rebuild_failed", extra={"error": str(e)})
+
         # Record scan
         self.kg.graph.record_scan(
             company_id=self.kg.company_id,
@@ -304,6 +317,7 @@ class Donna(BaseAgent):
                 "stale_rules": stale_rules,
                 "stale_other": stale_other,
                 "open_conflicts": new_conflicts,
+                "personas_built": personas_built,
             },
         )
 

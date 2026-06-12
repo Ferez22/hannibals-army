@@ -203,3 +203,49 @@ class KnowledgeGraph:
 
     def confirm_node(self, node_id: str, by: str) -> None:
         self.graph.confirm_node(node_id, by)
+
+    # ---- Conversations (Phase 12) ----
+    def get_or_create_conversation(
+        self, *, chat_id: str, channel: str, person_id: str | None = None,
+        idle_timeout_hours: float = 6.0,
+    ) -> dict:
+        """Return current active conversation for `(chat_id, channel)`; create new
+        when the previous one timed out or none exists."""
+        existing = self.graph.get_active_conversation(
+            company_id=self.company_id, chat_id=str(chat_id), channel=channel,
+            idle_timeout_hours=idle_timeout_hours,
+        )
+        if existing:
+            return existing
+        # Close any stale-but-still-marked-active rows
+        self.graph.deactivate_conversations(
+            company_id=self.company_id, chat_id=str(chat_id), channel=channel,
+        )
+        new_id = self.graph.start_conversation(
+            company_id=self.company_id, person_id=person_id,
+            chat_id=str(chat_id), channel=channel,
+        )
+        return self.graph.get_active_conversation(
+            company_id=self.company_id, chat_id=str(chat_id), channel=channel,
+        ) or {"id": new_id, "chat_id": str(chat_id), "channel": channel,
+              "person_id": person_id, "active": True}
+
+    def reset_conversation(self, *, chat_id: str, channel: str) -> int:
+        """Hard reset — deactivates current convo. Next message auto-creates new."""
+        return self.graph.deactivate_conversations(
+            company_id=self.company_id, chat_id=str(chat_id), channel=channel,
+        )
+
+    def append_conversation_message(
+        self, *, conversation_id: int, role: str, content: str,
+        intent: str | None = None, cited_ids: list[str] | None = None,
+    ) -> int:
+        return self.graph.append_message(
+            conversation_id=conversation_id, role=role, content=content,
+            intent=intent, cited_ids=cited_ids,
+        )
+
+    def recent_messages(self, conversation_id: int, limit: int = 6) -> list[dict]:
+        return self.graph.list_recent_messages(
+            conversation_id=conversation_id, limit=limit,
+        )

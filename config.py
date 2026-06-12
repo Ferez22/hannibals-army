@@ -53,6 +53,7 @@ REPO_ROOT = Path(__file__).resolve().parent
 DB_DIR = REPO_ROOT / "db"
 DB_PATH = DB_DIR / "graph.db"
 VECTOR_DIR = REPO_ROOT / "memory" / "chroma"
+PERSONA_DIR = REPO_ROOT / "memory" / "persona"  # Phase 12 — SCRIBE per-Person YAML
 LOG_DIR = REPO_ROOT / "logs"
 SAMPLES_DIR = REPO_ROOT / "data" / "samples"
 

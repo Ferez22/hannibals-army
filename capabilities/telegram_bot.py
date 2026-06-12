@@ -162,18 +162,69 @@ def _handle_command(text: str, chat_id: str, sender: dict) -> None:
     if cmd == "/register":
         _reply_register(chat_id, sender, arg)
         return
+    if cmd == "/reset":
+        _reply_reset(chat_id, sender)
+        return
+    if cmd in ("/refresh_persona", "/refresh-persona"):
+        _reply_refresh_persona(chat_id, sender)
+        return
     notifier.send_telegram(f"Unknown command: <code>{_esc(cmd)}</code>\nTry <code>/help</code>",
                            chat_id=chat_id)
+
+
+def _reply_reset(chat_id: str, sender: dict) -> None:
+    """End current conversation. Next message starts fresh — no prior context."""
+    from core.ingestion_pipeline import get_kg
+    kg = get_kg()
+    n = kg.reset_conversation(chat_id=chat_id, channel="telegram")
+    if n:
+        notifier.send_telegram(
+            "✅ Conversation reset. Next message starts fresh.",
+            chat_id=chat_id,
+        )
+    else:
+        notifier.send_telegram(
+            "Nothing active to reset.",
+            chat_id=chat_id,
+        )
+
+
+def _reply_refresh_persona(chat_id: str, sender: dict) -> None:
+    """Force SCRIBE to rebuild the sender's persona card."""
+    person_id = sender.get("person_id")
+    if not person_id:
+        notifier.send_telegram(
+            "I don't know who you are yet — ask admin to <code>/register</code> you first.",
+            chat_id=chat_id,
+        )
+        return
+    from agents.scribe import SCRIBE
+    from core.ingestion_pipeline import get_kg
+    SCRIBE.kg = get_kg()
+    result = SCRIBE.invoke({"action": "build", "person_id": person_id})
+    if result.success:
+        notifier.send_telegram(
+            "🪶 Persona refreshed. Sections: "
+            f"<code>{_esc(', '.join(result.data.get('sections', [])))}</code>",
+            chat_id=chat_id,
+        )
+    else:
+        notifier.send_telegram(
+            f"Persona refresh failed: {_esc(result.error or '')}",
+            chat_id=chat_id,
+        )
 
 
 def _reply_help(chat_id: str) -> None:
     notifier.send_telegram(
         "<b>Hannibal's Army bot</b>\n\n"
-        "<code>/me</code>         how the bot sees you\n"
-        "<code>/pending</code>    pending entities count\n"
-        "<code>/scan</code>       run DONNA full scan\n"
+        "<code>/me</code>               how the bot sees you\n"
+        "<code>/pending</code>          pending entities count\n"
+        "<code>/scan</code>             run DONNA full scan\n"
+        "<code>/reset</code>            forget our current chat, start fresh\n"
+        "<code>/refresh_persona</code>  rebuild what I remember about you\n"
         "<code>/register &lt;name&gt;</code>  (admin) link this chat to a Person\n"
-        "<code>/help</code>       this message\n\n"
+        "<code>/help</code>             this message\n\n"
         "Or just type a question — I'll answer.",
         chat_id=chat_id,
     )
@@ -275,11 +326,24 @@ def _handle_freetext(text: str, chat_id: str, sender: dict) -> None:
         _propose_edit(text, chat_id, sender)
         return
 
-    # Regular query — pass sender tier + person_id for retrieval filter
+    # Regular query — Phase 12 wires conversation memory:
+    # 1) Open / reuse active conversation for this chat
+    # 2) Pass conversation_id to ORACLE (loads recent turns + persona)
+    # 3) Append both user + assistant messages after answer
+    from core.ingestion_pipeline import get_kg
+    kg = get_kg()
+    conv = kg.get_or_create_conversation(
+        chat_id=chat_id, channel="telegram", person_id=sender.get("person_id"),
+    )
+    kg.append_conversation_message(
+        conversation_id=conv["id"], role="user", content=text,
+    )
+
     result = ORACLE.invoke({
         "question": text,
         "sender_person_id": sender.get("person_id"),
         "sender_tier": sender.get("tier"),
+        "conversation_id": conv["id"],
     })
     if not result.success:
         notifier.send_telegram(f"Error: {_esc(result.error or '')}", chat_id=chat_id)
@@ -287,7 +351,15 @@ def _handle_freetext(text: str, chat_id: str, sender: dict) -> None:
     data = result.data if isinstance(result.data, dict) else {"answer": str(result.data)}
     answer = data.get("answer", "")
     diag_intent = (data.get("diag") or {}).get("intent", "?")
-    # Convert LLM markdown → Telegram HTML (handles **bold**, # headers, lists, code, links)
+
+    # Persist assistant turn before sending — if Telegram send fails, we still
+    # have it for next-turn context
+    kg.append_conversation_message(
+        conversation_id=conv["id"], role="assistant", content=answer,
+        intent=diag_intent, cited_ids=result.cited_nodes,
+    )
+
+    # Convert LLM markdown → Telegram HTML
     rendered = text_render.markdown_to_telegram_html(answer)
     notifier.send_telegram(
         f"{rendered}\n\n<i>intent: {diag_intent}</i>",

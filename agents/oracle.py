@@ -25,6 +25,7 @@ class Oracle(BaseAgent):
 
     def invoke(self, task: dict[str, Any]) -> AgentResult:
         import config
+        from capabilities import persona_store
 
         question = (task.get("question") or "").strip()
         if not question:
@@ -38,6 +39,25 @@ class Oracle(BaseAgent):
         sender_tier: str = task.get("sender_tier") or config.UNKNOWN_SENDER_TIER
         sender_tier_rank = config.tier_rank(sender_tier)
 
+        # Phase 12 — Conversation memory.
+        # `conversation_id`: caller (Telegram bot / TUI) opens/reuses a convo and
+        # passes the id. Oracle pulls recent turns + persona from there.
+        conversation_id: int | None = task.get("conversation_id")
+        recent_turns: list[dict] = []
+        if conversation_id:
+            try:
+                recent_turns = self.kg.recent_messages(conversation_id, limit=6)
+            except Exception as e:
+                log.warning("recent_messages_failed", extra={"error": str(e)})
+
+        # Persona injection — sender's own card. Other people's cards are NEVER
+        # injected here; the requesting agent decides whose persona to load.
+        persona_block = ""
+        if sender_person_id:
+            persona_data = persona_store.load_persona(sender_person_id)
+            if persona_data:
+                persona_block = persona_store.render_persona_for_prompt(persona_data)
+
         # 1) Classify intent
         intent_info = oracle_intent.classify(question)
         intent = intent_info["intent"]
@@ -48,8 +68,10 @@ class Oracle(BaseAgent):
                    "sender_tier": sender_tier},
         )
 
-        # 2) Clarification short-circuit
-        if intent_info["needs_clarification"]:
+        # 2) Clarification short-circuit — skipped when conv context exists, so
+        # follow-ups like "her email?" resolve via prior turns instead of asking
+        # the user to repeat themselves.
+        if intent_info["needs_clarification"] and not recent_turns:
             return AgentResult(
                 True,
                 data={
@@ -73,6 +95,8 @@ class Oracle(BaseAgent):
             question=question, intent=intent,
             source_blocks=retrieval["source_blocks"],
             has_unconfirmed=retrieval.get("has_unconfirmed", False),
+            persona_block=persona_block,
+            recent_turns=recent_turns,
         )
 
         diag = {
